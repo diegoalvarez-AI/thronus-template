@@ -1,0 +1,46 @@
+{
+  "metodologia": "Thronus Context Architecture (TCA) v2",
+  "projeto": "{{PROJECT_NAME}}",
+  "data_snapshot": "{{DATA_INICIO}}",
+  "arquitetura_e_padroes": {
+    "linguagem": "Python 3.11",
+    "framework": "Django 5.1",
+    "servidor": "gunicorn",
+    "banco": "PostgreSQL (psycopg 3)",
+    "ultima_migration": null,
+    "entrypoints": [],
+    "app_destino_importacao": "persistence",
+    "app_label_django": "persistence",
+    "app_config_path": "src/app/infrastructure/persistence/apps.py",
+    "models_path": "src/app/infrastructure/persistence/models.py",
+    "admin_path": "src/app/infrastructure/persistence/admin.py",
+    "urls_path": "src/app/infrastructure/config/urls.py",
+    "settings_path": "src/app/infrastructure/config/settings.py",
+    "migrations_dir": "src/app/infrastructure/persistence/migrations/",
+    "camada_negocio": "src/app/domain/ e src/app/application/",
+    "base_testes": "pytest + pytest-django; markers: @pytest.mark.unit, @pytest.mark.integration; conftest.py na raiz"
+  },
+  "dependencias": {
+    "Django": "5.1",
+    "gunicorn": "22.0.0",
+    "psycopg[binary]": "3.x",
+    "whitenoise": "6.x",
+    "sentry-sdk[django]": ">=2.0"
+  },
+  "perfis_e_permissoes_ativos": [],
+  "servicos_e_regras_existentes_reutilizaveis": {},
+  "modelos_e_tabelas_detectados": {},
+  "estado_da_trilha": {
+    "modulo": "{{PROJECT_NAME}}",
+    "ultima_micro_spec_concluida": null,
+    "status_modulo_percentual": "0%",
+    "proximo_gate_ci": "GATE_001_SETUP",
+    "micro_spec_ativa": null,
+    "total_testes": 0
+  },
+  "_archive": {
+    "path": "docs/ThronusSpec/03_Desenvolvimento/payload_archive/",
+    "keys": [],
+    "nota": "Carregar apenas contratos relevantes para a MS ativa via Scout subagent."
+  }
+}
