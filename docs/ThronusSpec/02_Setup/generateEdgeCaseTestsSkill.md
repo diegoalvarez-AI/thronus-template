@@ -1,24 +1,40 @@
-# Skill: generateEdgeCaseTestsSkill (Metodologia TCA)
+# Skill: generateEdgeCaseTestsSkill (Metodologia TCA v2)
 
 ## 1. Objetivo Operacional
-Garantir a máxima resiliência e blindagem de segurança do software em desenvolvimento. Este skill atua na fase de escrita de testes (Ciclo RED do TDD), forçando a IA a gerar cenários de teste automatizados focados estritamente em limites, falhas, inputs corrompidos e ataques de estouro de escopo [source: 1].
+Injetar e validar cenários de estresse, limite e segurança após o estado GREEN. O skill opera sobre `context/activeContext.md` para derivar os casos extremos relevantes ao domínio e stack da MS ativa — independente de linguagem ou framework.
 
-## 2. Protocolo de Geração de Casos Extremos (Passo a Passo Obrigatório)
-O motor de IA deve abrir e analisar os requisitos contidos em `context/activeContext.md` e gerar cenários de teste unitários ou de integração para as seguintes categorias [source: 1]:
+---
 
-### Passo 2.1: Estouro de Limites de Dados e Tipagem
-* **Valores Fora de Escopo:** Gerar testes injetando dados numéricos além dos limites permitidos (ex: notas negativas, pontuações acima do teto estipulado, valores vazios) [source: 1, 0.1.4].
-* **Injeção de Strings Gigantes:** Testar o comportamento do modelo ao receber payloads contendo textos imensos ou caracteres especiais inválidos em campos delimitados.
+## 2. Protocolo de Geração de Casos Extremos
 
-### Passo 2.2: Payload Malformado, Nulos e Vazios
-* **Contratos Corrompidos:** Injetar estruturas JSON ou dicionários de entrada com chaves ausentes, chaves renomeadas incorretamente ou com valores nulos em campos obrigatórios, garantindo que o sistema capture o erro sem gerar falhas catastróficas (Internal Server Error) [source: 1].
+### Passo 2.1: Estouro de Limites e Tipagem
+* **Valores fora de escopo:** Injetar dados numéricos além dos limites definidos nos critérios de aceite (negativos, acima do teto, zero onde não permitido).
+* **Strings extremas:** Payloads com textos muito longos, caracteres especiais, unicode inesperado, ou strings vazias em campos obrigatórios.
+* **Tipos errados:** Passar string onde se espera inteiro, null onde se espera lista, float onde se espera inteiro.
 
-### Passo 2.3: Idempotência sob Concorrência Crítica
-* **Disparos Simultâneos:** Gerar cenários de testes que simulem requisições duplicadas enviadas exatamente no mesmo milissegundo com chaves de identificação idênticas, validando se a restrição única do Postgres bloqueia a persistência duplicada com sucesso [source: 1].
+### Passo 2.2: Payload Malformado, Nulos e Ausentes
+* **Chaves ausentes:** Estruturas de entrada (JSON, dict, objeto) com campos obrigatórios faltando.
+* **Chaves extras:** Campos não previstos no contrato — verificar que são ignorados sem erro catastrófico.
+* **Valores nulos em campos não-anuláveis:** Garantir que a camada de validação rejeita com mensagem clara, não com exceção genérica de infraestrutura.
 
-### Passo 2.4: Quebra de Permissões e Segurança
-* **Invasão de Contexto:** Tentar disparar a execução de serviços ou endpoints utilizando usuários autenticados mas que não possuem os perfis de acesso adequados listados na matriz do `projeto_payload.json`, garantindo o bloqueio por exceção de segurança [source: 1].
+### Passo 2.3: Idempotência e Concorrência
+* **Requisições duplicadas:** Simular o mesmo comando/operação enviado duas vezes em sequência — o resultado deve ser idêntico ao de uma única execução (sem duplicatas de dados, sem erro na segunda chamada se idempotente por spec).
+* **Conflito de constraint:** Se o domínio tem unicidade (email único, código único, etc.), verificar que a constraint bloqueia a duplicata com erro tratado, não com stack trace.
+
+### Passo 2.4: Quebra de Permissão e Segurança
+* **Acesso sem autenticação:** Endpoints ou serviços que exigem autenticação devem retornar 401/403 — não 500.
+* **Escalada de privilégio:** Usuário com perfil de menor privilégio tentando executar operação reservada a perfil superior — verificar bloqueio explícito.
+* **Injeção:** Se o serviço constrói queries ou comandos com input externo, verificar que inputs maliciosos não alteram a estrutura do comando (SQL injection, command injection, path traversal).
+
+### Passo 2.5: Seleção de Casos por Relevância
+* Não gerar todos os casos acima para toda MS. Ler `context/activeContext.md` e selecionar apenas as categorias aplicáveis ao domínio e risco da MS ativa.
+* MSs que processam apenas dados internos (sem input externo) podem pular §2.4.
+* MSs puramente de leitura podem pular §2.3.
+
+---
 
 ## 3. Saída Esperada
-* Escrever e acoplar os blocos de código de testes automatizados diretamente dentro do arquivo de testes da funcionalidade corrente [source: 1].
-* Emitir o status `STATUS_EDGE_CASES_PRONTOS` no terminal para dar sequência ao ciclo.
+
+* Escrever os casos EDGE no arquivo de testes da MS atual (`test_edge_ms<NNN>_<descricao>`).
+* Executar a suíte completa — todos os testes EDGE e BDD devem passar.
+* Emitir `STATUS_EDGE_CASES_PRONTOS` e transitar para `[ESTADO_COMMIT]`.
