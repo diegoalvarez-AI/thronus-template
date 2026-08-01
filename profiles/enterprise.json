@@ -1,0 +1,32 @@
+{
+  "perfil": "enterprise",
+  "descricao": "Plataforma crítica, sistema legado com reescrita, contrato governamental de alta complexidade. 50+ Micro Specs. Entrega em trimestres.",
+  "exemplos": ["reescrita de sistema tributário", "plataforma de saúde com prontuário eletrônico", "sistema de gestão de contratos públicos de grande porte", "plataforma de ensino com BI integrado"],
+  "fases": {
+    "discovery":             { "status": "obrigatoria", "artefatos_adicionais": ["AS-IS vs TO-BE", "análise de impacto organizacional"] },
+    "functional_modeling":   { "status": "obrigatoria", "artefatos_adicionais": ["diagrama de contexto do sistema", "mapa de domínios (DDD bounded contexts)"] },
+    "architecture":          { "status": "obrigatoria", "artefatos_adicionais": ["múltiplos ADRs por decisão significativa", "análise de segurança (threat model)", "plano de migração se sistema legado"] },
+    "spec":                  { "status": "obrigatoria" },
+    "plan":                  { "status": "obrigatoria" },
+    "red":                   { "status": "obrigatoria" },
+    "green":                 { "status": "obrigatoria" },
+    "edge":                  { "status": "obrigatoria", "inclui": ["testes de carga", "testes de segurança OWASP", "teste de falha de dependência"] },
+    "commit":                { "status": "obrigatoria" }
+  },
+  "gates_intermediarios": [
+    "GATE_DISCOVERY_APROVADO — aprovação formal por stakeholders identificados",
+    "GATE_FUNCTIONAL_APROVADO — revisão com especialistas de domínio (não apenas TI)",
+    "GATE_ARCHITECTURE_APROVADO — revisão técnica independente do ADR",
+    "GATE_SECURITY_REVIEW — antes do primeiro deploy em produção",
+    "GATE_PERFORMANCE_BASELINE — antes do lançamento",
+    "GATE_COMPLIANCE — LGPD / regulamentações setoriais / TCU se aplicável",
+    "GATE_PILOT — operação piloto com usuário real antes do rollout"
+  ],
+  "limites": {
+    "max_micro_specs": "ilimitado",
+    "max_complexidade_ms": "G (GG deve ser decomposta)",
+    "documentacao": "completa + manual operacional + manual do usuário + roteiros de QA",
+    "cobertura_testes_minima": "90%"
+  },
+  "gate_encerramento": "aceite formal documentado + treinamento dos usuários + SLA definido"
+}

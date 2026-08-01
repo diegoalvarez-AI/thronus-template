@@ -1,0 +1,30 @@
+{
+  "perfil": "standard",
+  "descricao": "Aplicação de negócio, plataforma SaaS, sistema de gestão. 15–50 Micro Specs. Entrega em meses.",
+  "exemplos": ["sistema de gestão educacional", "plataforma de RH", "ERP setorial", "marketplace", "sistema de contratos públicos"],
+  "fases": {
+    "discovery":             { "status": "obrigatoria" },
+    "functional_modeling":   { "status": "obrigatoria" },
+    "architecture":          { "status": "obrigatoria" },
+    "spec":                  { "status": "obrigatoria" },
+    "plan":                  { "status": "obrigatoria" },
+    "red":                   { "status": "obrigatoria" },
+    "green":                 { "status": "obrigatoria" },
+    "edge":                  { "status": "obrigatoria" },
+    "commit":                { "status": "obrigatoria" }
+  },
+  "gates_intermediarios": [
+    "GATE_DISCOVERY_APROVADO — cliente valida o enunciado do problema antes de modelar",
+    "GATE_FUNCTIONAL_APROVADO — cliente valida o backlog de MSs antes de decidir arquitetura",
+    "GATE_ARCHITECTURE_APROVADO — equipe técnica valida ADR antes de iniciar código",
+    "GATE_MVP — primeiras MSs em produção, feedback real antes de continuar",
+    "GATE_RELEASE_[N] — por ciclo de entrega acordado"
+  ],
+  "limites": {
+    "max_micro_specs": 50,
+    "max_complexidade_ms": "G",
+    "documentacao": "completa — todos os artefatos TCA",
+    "cobertura_testes_minima": "85%"
+  },
+  "gate_encerramento": "homologação formal + entrega de documentação operacional"
+}

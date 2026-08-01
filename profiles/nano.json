@@ -1,0 +1,23 @@
+{
+  "perfil": "nano",
+  "descricao": "Script, automação, utilitário, POC. Menos de 5 Micro Specs. Entrega em dias.",
+  "exemplos": ["script de migração de dados", "bot de notificação", "relatório automatizado", "integração pontual entre dois sistemas", "ferramenta CLI"],
+  "fases": {
+    "discovery":             { "status": "obrigatoria", "forma": "simplificada — apenas problema e critério de sucesso" },
+    "functional_modeling":   { "status": "ignorada",    "razao": "escopo muito pequeno para justificar modelagem formal" },
+    "architecture":          { "status": "obrigatoria", "forma": "simplificada — ADR de 1 parágrafo" },
+    "spec":                  { "status": "obrigatoria" },
+    "plan":                  { "status": "opcional",    "razao": "aplicar apenas se a MS tiver >3 componentes" },
+    "red":                   { "status": "obrigatoria" },
+    "green":                 { "status": "obrigatoria" },
+    "edge":                  { "status": "opcional",    "razao": "aplicar apenas para código que processa dados externos" },
+    "commit":                { "status": "obrigatoria" }
+  },
+  "limites": {
+    "max_micro_specs": 5,
+    "max_complexidade_ms": "M",
+    "documentacao": "minimal — apenas discovery.md e ADR de 1 parágrafo",
+    "cobertura_testes_minima": "60%"
+  },
+  "gate_encerramento": "entrega funcional validada pelo solicitante"
+}

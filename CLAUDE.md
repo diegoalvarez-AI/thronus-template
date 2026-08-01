@@ -1,8 +1,7 @@
 # CLAUDE.md — Thronus Template
 
 Este arquivo é carregado automaticamente em toda sessão Claude Code.
-Substitua `{{PROJECT_NAME}}` e `{{CLIENT_NAME}}` ao inicializar um novo projeto
-(ou execute `./thronus-init.sh <nome-projeto> <nome-cliente>`).
+Execute `./thronus-init.sh` para inicializar um novo projeto com perfil de complexidade e stack tecnológico específicos.
 
 ---
 
@@ -10,99 +9,104 @@ Substitua `{{PROJECT_NAME}}` e `{{CLIENT_NAME}}` ao inicializar um novo projeto
 
 ## 1. Diretriz de Autossuficiência (Zero Interaction Rule)
 
-Este repositório opera sob execução autônoma em pipeline contínuo. O agente está TERMINANTEMENTE PROIBIDO de pausar a execução para solicitar aprovações humanas, exibir menus interativos ou exigir comandos manuais intermediários — **exceto pelo gate único de aprovação humana após o ESTADO_PLAN**, que é obrigatório antes de escrever qualquer código produtivo.
+Este repositório opera sob execução autônoma em pipeline contínuo. O agente está TERMINANTEMENTE PROIBIDO de pausar a execução para solicitar aprovações humanas, exibir menus interativos ou exigir comandos manuais intermediários — **exceto pelos gates humanos explicitamente marcados no pipeline** (aprovação do ADR em Standard/Enterprise e gate único antes de escrever código em todo perfil).
 
-## 2. Automação do Fluxo de Codificação (TDA State Machine v2)
+## 2. Perfis de Complexidade
 
-Toda solicitação de desenvolvimento de Micro Spec deve acionar obrigatoriamente o Skill Central `docs/ThronusSpec/02_Setup/tcaOrchestratorSkill.md`. O agente processa as fases de forma síncrona, com rollbacks definidos:
+O pipeline TCA se adapta ao perfil do projeto. O perfil ativo está em `payload_index.json → estado_da_trilha.perfil` e seu detalhamento em `profiles/<perfil>.json`.
 
-1. **[ESTADO_SPEC]** → Invoca `loadProjectPayloadSkill.md` (carrega payload_index.json + spec da MS ativa).
-2. **[ESTADO_PLAN]** → Gera estratégia técnica, auto-audita via `evaluatePlanIntegritySkill.md` (MAX 3 iterações). **Gate humano obrigatório antes de avançar.**
-3. **[ESTADO_RED]** → Escreve testes BDD e comprova falha limpa (ImportError/AttributeError).
-4. **[ESTADO_GREEN]** → Implementa código produtivo, roda suíte até 100% verde.
-5. **[ESTADO_EDGE]** → Invoca `generateEdgeCaseTestsSkill.md`. Testes de limite, payload corrompido, concorrência, permissão.
-6. **[ESTADO_COMMIT]** → Snapshot-diff gate + `monitorEvolutionMetricsSkill.md` + `gitCommitGuardSkill.md` + commit.
+| Perfil | Escopo | Fases ativas |
+|--------|--------|--------------|
+| **nano** | Script, automação, POC. ≤5 MS | DISCOVERY (simplificado) → ARCHITECTURE (1 parágrafo) → SPEC → RED → GREEN → COMMIT |
+| **micro** | API, MVP, portal simples. 5–15 MS | DISCOVERY → FUNCTIONAL (recomendado) → ARCHITECTURE → SPEC → PLAN → RED → GREEN → EDGE → COMMIT |
+| **standard** | Sistema de gestão, SaaS, plataforma. 15–50 MS | Pipeline completo + 5 gates intermediários |
+| **enterprise** | Sistema crítico, reescrita, contrato gov. 50+ MS | Pipeline completo + 7 gates + LGPD/compliance |
 
-Rollbacks: PLAN→SPEC (max iterations), GREEN→PLAN (impossibilidade arquitetural), EDGE→GREEN (bug de lógica), EDGE→PLAN (falha arquitetural), COMMIT→ABORT (diff inesperado).
+## 3. Pipeline TCA (Estado por Estado)
+
+Toda solicitação de desenvolvimento deve acionar `docs/ThronusSpec/02_Setup/tcaOrchestratorSkill.md`.
+
+**Fases Pré-Código (independentes de tecnologia):**
+1. **[ESTADO_DISCOVERY]** → `discoverySkill.md` — Problema canônico, stakeholders, critérios de sucesso
+2. **[ESTADO_FUNCTIONAL]** → `functionalModelingSkill.md` — Glossário, entidades, casos de uso, backlog de MSs
+3. **[ESTADO_ARCHITECTURE]** → `architectureDecisionSkill.md` — ADR com score 4-dimensões, stack decidido por camada
+
+**Ciclo TDD (após decisão de arquitetura):**
+4. **[ESTADO_SPEC]** → `loadProjectPayloadSkill.md` — Carrega contexto e gera spec da MS ativa
+5. **[ESTADO_PLAN]** → `evaluatePlanIntegritySkill.md` (MAX 3 iter.) + **gate humano obrigatório**
+6. **[ESTADO_RED]** → Testes BDD com falha limpa comprovada
+7. **[ESTADO_GREEN]** → Implementação produtiva, 100% verde
+8. **[ESTADO_EDGE]** → `generateEdgeCaseTestsSkill.md` — Limites, payload corrompido, concorrência
+9. **[ESTADO_COMMIT]** → Snapshot-diff gate + `monitorEvolutionMetricsSkill.md` + `gitCommitGuardSkill.md`
+
+Rollbacks: PLAN→SPEC, GREEN→PLAN, EDGE→GREEN, EDGE→PLAN, COMMIT→ABORT.
+Rollbacks pré-código: FUNCTIONAL→DISCOVERY, ARCHITECTURE→FUNCTIONAL.
 
 ---
 
 # Projeto: {{PROJECT_NAME}} — {{CLIENT_NAME}}
 
 **Descrição:** (preencher ao inicializar)
-
-**Stack:** Python 3.11 · Django 5.1 · PostgreSQL 16 (psycopg3) · Gunicorn · Nginx · Docker Compose
-**Estado da trilha:** MS-001 pendente | Próximo gate: `GATE_001_SETUP`
+**Perfil de complexidade:** {{PERFIL}}
+**Stack:** (definido após [ESTADO_ARCHITECTURE] — ver `docs/ThronusSpec/01_Planejamento/architecture_decision.md`)
+**Estado da trilha:** Pendente | Próximo gate: `GATE_DISCOVERY`
 
 ---
 
 ## Comandos
 
 ```bash
-# Testes (SQLite in-memory, sem PostgreSQL)
-pytest                                   # suíte completa
-pytest -k "CT-01"                        # filtro por cenário
-pytest -m unit                           # apenas testes unitários (sem banco)
-pytest -m integration                    # testes de integração (SQLite in-memory)
+# Os comandos abaixo são preenchidos após a decisão de arquitetura.
+# Consulte docs/ThronusSpec/01_Planejamento/architecture_decision.md
+# e o starter aplicado em starters/<stack>/.
 
-# Django
-python src/app/infrastructure/manage.py migrate
-python src/app/infrastructure/manage.py createsuperuser
+# Testes (adaptar ao framework do projeto)
+# pytest / jest / go test / cargo test / etc.
 
-# Docker
-docker compose up --build
-docker compose exec web python src/app/infrastructure/manage.py migrate
+# Desenvolvimento local
+# Consultar README.md gerado pelo starter tecnológico
+
+# CI/CD
+# Ver .github/workflows/ci.yml gerado pelo starter
 ```
-
-A variável `DJANGO_SETTINGS_MODULE` nos testes é definida via `pytest.ini` como `app.infrastructure.config.settings_test`.
 
 ---
 
 ## Arquitetura
 
-### Estrutura de camadas (DDD)
+> Preenchido após [ESTADO_ARCHITECTURE]. Os campos abaixo são exemplos; a estrutura real depende do stack decidido no ADR.
+
+### Estrutura de camadas
 
 ```
-src/app/
-├── domain/              # Entidades puras, sem Django (@pytest.mark.unit)
-├── application/         # Serviços de caso de uso, sem HTTP/ORM direto
-│   ├── ports/           # Protocol interfaces (Port/Adapter)
-│   ├── services/        # XxxService.metodo() → dataclass Resultado
-│   └── validators/
-└── infrastructure/
-    ├── config/          # settings.py, settings_test.py, urls.py
-    └── persistence/     # ÚNICO app Django registrado ("persistence")
-        ├── models.py
-        ├── admin.py
-        ├── repositories.py  # Adapters Django para os Ports
-        └── management/commands/
+src/{{PROJECT_NAME}}/
+├── domain/          # Entidades e regras de negócio puras (sem dependências externas)
+├── application/     # Casos de uso, ports (Protocol/Interface), serviços
+│   ├── ports/       # Contratos das dependências externas (Port/Adapter)
+│   └── services/    # Orquestração de casos de uso
+└── infrastructure/  # Implementações concretas (DB, HTTP, email, etc.)
 ```
-
-### Único app Django
-
-Um único app Django com `app_label = "persistence"`. Todos os modelos, migrações e admin centralizados. O `INSTALLED_APPS` registra `"persistence.apps.PersistenceConfig"`.
-
-O `pythonpath` no `pytest.ini` inclui `src` e `src/app/infrastructure`.
 
 ### Port/Adapter Pattern
 
-Serviços de aplicação dependem de Protocols (em `application/ports/`), não do ORM diretamente. A infraestrutura fornece adaptadores Django em `persistence/repositories.py`. Isso permite testes `@pytest.mark.unit` sem banco de dados.
+Serviços de aplicação dependem de interfaces/contratos (em `application/ports/`), nunca de implementações concretas de infraestrutura. Isso permite testes unitários sem banco de dados ou rede.
 
 ### Invariantes críticos
 
-- **EventoAuditoria append-only**: `save()` com pk existente e `delete()` levantam `ValidationError`.
-- **Port/Adapter**: services nunca importam `persistence.models` — usam apenas interfaces definidas em `application/ports/`.
-- **Convencional Commits**: `type(scope): description [MS-NNN]` em todo commit.
+- **Conventional Commits**: `type(scope): description [MS-NNN]` em todo commit.
+- **Port/Adapter**: serviços nunca importam camada de infraestrutura diretamente.
+- **EventoAuditoria (se aplicável)**: append-only — nunca modificar ou deletar registros existentes.
 
 ### Testes
 
-Espelhamento estrutural obrigatório: `domain/ → tests/domain/`, `application/services/ → tests/application/services/`, `infrastructure/ → tests/infrastructure/`.
+Espelhamento estrutural obrigatório: `domain/ → tests/domain/`, `application/ → tests/application/`, `infrastructure/ → tests/infrastructure/`.
 
-- `test_bdd_ms<NNN>_<descricao>.py` — cenários BDD (CT-01..CT-XX)
-- `test_unit_ms<NNN>_<descricao>.py` — testes unitários puros (`@pytest.mark.unit`, sem banco)
-- `test_edge_ms<NNN>_<descricao>.py` — casos extremos (EDGE-01..STRESS-XX)
+- `test_bdd_ms<NNN>_<descricao>` — cenários BDD (CT-01..CT-XX)
+- `test_unit_ms<NNN>_<descricao>` — testes unitários puros (sem infraestrutura)
+- `test_edge_ms<NNN>_<descricao>` — casos extremos (EDGE-01..STRESS-XX)
 
-### Variáveis de ambiente (produção)
+Cobertura mínima por perfil: nano=60% · micro=75% · standard=85% · enterprise=90%.
 
-Obrigatórias: `SECRET_KEY`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `ALLOWED_HOSTS`.
-Opcionais: `POSTGRES_PORT` (5432), `SENTRY_DSN`, `APP_RELEASE`, `DJANGO_DEBUG` (false).
+### Variáveis de ambiente
+
+(Preenchido após decisão de arquitetura — adaptar ao stack escolhido.)

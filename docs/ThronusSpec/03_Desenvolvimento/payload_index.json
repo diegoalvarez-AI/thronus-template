@@ -1,40 +1,39 @@
 {
   "metodologia": "Thronus Context Architecture (TCA) v2",
   "projeto": "{{PROJECT_NAME}}",
+  "cliente": "{{CLIENT_NAME}}",
   "data_snapshot": "{{DATA_INICIO}}",
   "arquitetura_e_padroes": {
-    "linguagem": "Python 3.11",
-    "framework": "Django 5.1",
-    "servidor": "gunicorn",
-    "banco": "PostgreSQL (psycopg 3)",
-    "ultima_migration": null,
+    "_nota": "Preenchido após [ESTADO_ARCHITECTURE]. Substitua os campos abaixo com o stack decidido no ADR.",
+    "linguagem": null,
+    "framework": null,
+    "servidor": null,
+    "banco": null,
+    "padrao_testes": null,
+    "ferramenta_ci": null,
+    "containerizacao": null,
     "entrypoints": [],
-    "app_destino_importacao": "persistence",
-    "app_label_django": "persistence",
-    "app_config_path": "src/app/infrastructure/persistence/apps.py",
-    "models_path": "src/app/infrastructure/persistence/models.py",
-    "admin_path": "src/app/infrastructure/persistence/admin.py",
-    "urls_path": "src/app/infrastructure/config/urls.py",
-    "settings_path": "src/app/infrastructure/config/settings.py",
-    "migrations_dir": "src/app/infrastructure/persistence/migrations/",
-    "camada_negocio": "src/app/domain/ e src/app/application/",
-    "base_testes": "pytest + pytest-django; markers: @pytest.mark.unit, @pytest.mark.integration; conftest.py na raiz"
+    "paths": {
+      "_nota": "Adaptar ao layout do starter aplicado. Remover campos não aplicáveis.",
+      "src_root": "src/{{PROJECT_NAME}}/",
+      "domain": "src/{{PROJECT_NAME}}/domain/",
+      "application": "src/{{PROJECT_NAME}}/application/",
+      "infrastructure": "src/{{PROJECT_NAME}}/infrastructure/"
+    }
   },
   "dependencias": {
-    "Django": "5.1",
-    "gunicorn": "22.0.0",
-    "psycopg[binary]": "3.x",
-    "whitenoise": "6.x",
-    "sentry-sdk[django]": ">=2.0"
+    "_nota": "Preenchido após [ESTADO_ARCHITECTURE]. Lista de dependências por camada do stack escolhido."
   },
   "perfis_e_permissoes_ativos": [],
   "servicos_e_regras_existentes_reutilizaveis": {},
   "modelos_e_tabelas_detectados": {},
   "estado_da_trilha": {
     "modulo": "{{PROJECT_NAME}}",
+    "perfil": "{{PERFIL}}",
+    "fase_atual": "DISCOVERY",
     "ultima_micro_spec_concluida": null,
     "status_modulo_percentual": "0%",
-    "proximo_gate_ci": "GATE_001_SETUP",
+    "proximo_gate": "GATE_DISCOVERY",
     "micro_spec_ativa": null,
     "total_testes": 0
   },

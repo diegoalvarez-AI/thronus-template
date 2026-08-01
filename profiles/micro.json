@@ -1,0 +1,23 @@
+{
+  "perfil": "micro",
+  "descricao": "Aplicação web simples, API REST, MVP. 5–15 Micro Specs. Entrega em semanas.",
+  "exemplos": ["site institucional com área logada", "API de integração", "painel administrativo simples", "MVP de produto", "portal de cadastro"],
+  "fases": {
+    "discovery":             { "status": "obrigatoria" },
+    "functional_modeling":   { "status": "recomendada", "razao": "pular apenas se o escopo já estiver completamente definido pelo cliente" },
+    "architecture":          { "status": "obrigatoria" },
+    "spec":                  { "status": "obrigatoria" },
+    "plan":                  { "status": "obrigatoria" },
+    "red":                   { "status": "obrigatoria" },
+    "green":                 { "status": "obrigatoria" },
+    "edge":                  { "status": "obrigatoria" },
+    "commit":                { "status": "obrigatoria" }
+  },
+  "limites": {
+    "max_micro_specs": 15,
+    "max_complexidade_ms": "G",
+    "documentacao": "discovery.md + functional_model.md (simplificado) + ADR",
+    "cobertura_testes_minima": "75%"
+  },
+  "gate_encerramento": "homologação pelo cliente em ambiente de staging"
+}
