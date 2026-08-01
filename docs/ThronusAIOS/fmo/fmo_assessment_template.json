@@ -1,0 +1,109 @@
+{
+  "_schema": "fmo_assessment_v1",
+  "_descricao": "Saída do Diagnóstico AI-First. Lido pelo fmoToDiscoveryBridgeSkill para pré-popular discovery.md do TCA.",
+
+  "cliente": {
+    "nome": "",
+    "cnpj": "",
+    "setor": "",
+    "porte": "micro | pequena | media",
+    "responsavel": "",
+    "cargo": ""
+  },
+
+  "diagnostico": {
+    "data": "YYYY-MM-DD",
+    "tier": 1,
+    "consultor": "",
+    "duracao_minutos": 0
+  },
+
+  "dimensoes": {
+    "processos": {
+      "nivel": 0,
+      "obs": "",
+      "evidencias_positivas": [],
+      "evidencias_negativas": [],
+      "quick_wins": [],
+      "sp_f_risks": []
+    },
+    "dados": {
+      "nivel": 0,
+      "obs": "",
+      "evidencias_positivas": [],
+      "evidencias_negativas": [],
+      "quick_wins": [],
+      "sistemas_identificados": []
+    },
+    "governanca": {
+      "nivel": 0,
+      "obs": "",
+      "evidencias_positivas": [],
+      "evidencias_negativas": [],
+      "quick_wins": [],
+      "riscos_lgpd": []
+    },
+    "qualificacao": {
+      "nivel": 0,
+      "obs": "",
+      "evidencias_positivas": [],
+      "evidencias_negativas": [],
+      "quick_wins": [],
+      "champions_identificados": [],
+      "resistencias_identificadas": []
+    },
+    "receptividade": {
+      "nivel": 0,
+      "obs": "",
+      "evidencias_positivas": [],
+      "evidencias_negativas": [],
+      "quick_wins": [],
+      "bloqueios_cronicos": []
+    }
+  },
+
+  "scoring": {
+    "score_medio": 0.0,
+    "gargalo_critico": "",
+    "ponto_de_alavanca": ""
+  },
+
+  "recomendacoes": {
+    "etapa_portfolio": "pre_condicoes | etapa_1_agentes | etapa_2_ops_inteligentes | etapa_3_produto_digital | etapa_4_growth",
+    "justificativa": "",
+    "perfil_tca": "micro | agentes | standard | enterprise",
+    "estimativa_micro_specs": "",
+    "estimativa_prazo_semanas": ""
+  },
+
+  "riscos_implementacao": [
+    {
+      "risco": "",
+      "severidade": "alto | medio | baixo",
+      "dimensao": "processos | dados | governanca | qualificacao | receptividade",
+      "mitigacao_sugerida": ""
+    }
+  ],
+
+  "constraints_tca": {
+    "qualificacao_le_2": false,
+    "dados_le_2": false,
+    "receptividade_le_2": false,
+    "processos_le_2": false
+  },
+
+  "intencao_cliente": {
+    "pain_point_primario": "",
+    "urgencia": "alta | media | baixa",
+    "motivacao_raio_x": ""
+  },
+
+  "proposta_discovery": {
+    "investimento_range": "",
+    "entregaveis": [],
+    "prazo_estimado": "",
+    "condicoes_especiais": ""
+  },
+
+  "observacoes_consultor": ""
+}
