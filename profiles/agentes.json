@@ -1,0 +1,49 @@
+{
+  "perfil": "agentes",
+  "descricao": "Projetos de automação e agentes de IA (Etapa 1 do portfólio Thronus). Agentes conversacionais, automações de processo, copilotos internos e integrações de canal. 3–12 Micro Specs. Entrega em semanas.",
+  "exemplos": [
+    "agente de qualificação de leads no WhatsApp",
+    "copiloto interno de consulta a base de conhecimento",
+    "automação de atendimento e follow-up",
+    "agente de agendamento integrado ao CRM",
+    "resumidor de atendimentos com sugestão de próximos passos"
+  ],
+  "fases": {
+    "discovery":             { "status": "obrigatoria", "nota": "mapear fluxos conversacionais e pontos de escalonamento humano" },
+    "functional_modeling":   { "status": "obrigatoria-adaptada", "nota": "modelar intenções, entidades, regras de negócio e critérios de escalonamento" },
+    "architecture":          { "status": "obrigatoria", "nota": "decisão de modelo LLM, plataforma de orquestração e canais de integração" },
+    "spec":                  { "status": "obrigatoria" },
+    "plan":                  { "status": "obrigatoria" },
+    "red":                   { "status": "obrigatoria-adaptada", "nota": "testes de fluxo conversacional e avaliação de resposta LLM" },
+    "green":                 { "status": "obrigatoria" },
+    "edge":                  { "status": "obrigatoria", "nota": "testes de alucinação, inputs ambíguos, inputs maliciosos, falha de canal" },
+    "commit":                { "status": "obrigatoria" }
+  },
+  "gates_intermediarios": [
+    "GATE_FLUXO_CONVERSACIONAL_APROVADO — cliente valida o mapa de intenções e pontos de escalonamento",
+    "GATE_QUALIDADE_LLM — avaliação de amostras de resposta antes do deploy em canal real",
+    "GATE_ESCALONAMENTO_HUMANO — validação de que todos os cenários críticos escalam corretamente"
+  ],
+  "testes": {
+    "tipo_primario": "conversational_flow",
+    "descricao_primario": "cenários de diálogo completos (happy path + desvios)",
+    "tipo_secundario": "llm_evaluation",
+    "descricao_secundario": "avaliação de qualidade de resposta: relevância, tom, ausência de alucinação",
+    "tipo_edge": "adversarial_inputs",
+    "descricao_edge": "inputs maliciosos, jailbreak attempts, mensagens ambíguas, payload vazio"
+  },
+  "limites": {
+    "max_micro_specs": 12,
+    "max_complexidade_ms": "G",
+    "documentacao": "fluxo conversacional + prompt registry + criterios de escalonamento",
+    "cobertura_testes_minima": "70%",
+    "prompt_versioning": "obrigatorio — todo prompt é versionado como código"
+  },
+  "invariantes_criticos": [
+    "O agente NUNCA toma ação irreversível sem confirmação humana explícita (ex: cancelar pedido, transferir valor, excluir registro)",
+    "Todo fluxo deve ter critério claro de escalonamento para atendente humano",
+    "Prompts são versionados no repositório; mudança de prompt = nova MS",
+    "O agente nunca finge ser humano quando questionado diretamente"
+  ],
+  "gate_encerramento": "validação em canal real com amostra de usuários reais por mínimo 48h antes do go-live completo"
+}
