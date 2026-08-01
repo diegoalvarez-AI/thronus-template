@@ -17,6 +17,10 @@ PRÉ-CÓDIGO (independente de tecnologia)
 [ARCHITECTURE] → [FUNCTIONAL]         ROLLBACK: decisão revela gap no modelo funcional
 [ARCHITECTURE] → [SPEC]               progressão (tecnologia decidida, starter aplicado)
 
+MANUTENÇÃO EVOLUTIVA (entrada de novas demandas)
+────────────────────────────────────────────────
+[TRIAGE]   → [SPEC]        demanda classificada e inserida no backlog → iniciar próximo ciclo
+
 CICLO TDD (tecnologia-dependente a partir daqui)
 ────────────────────────────────────────────────
 [SPEC]    → [PLAN]     progressão normal
@@ -24,6 +28,9 @@ CICLO TDD (tecnologia-dependente a partir daqui)
 [RED]     → [GREEN]    progressão automática após falha limpa confirmada
 [GREEN]   → [EDGE]     progressão automática após 100% verde
 [EDGE]    → [COMMIT]   progressão automática após EDGE verde
+[COMMIT]  → [DEPLOY]   progressão automática se cd_ativo = true
+[DEPLOY]  → [MONITOR]  progressão automática após health check OK
+[DEPLOY]  → [ABORT]    health check falhou — aguardar intervenção humana
 
 ROLLBACKS
 ─────────
@@ -33,6 +40,7 @@ ROLLBACKS
 [EDGE]     → [GREEN]        bug de lógica corrigível (ajuste fino)
 [EDGE]     → [PLAN]         falha arquitetural revelada em edge
 [COMMIT]   → [ABORT]        diff-check detecta arquivos não previstos na spec
+[MONITOR]  → [TRIAGE]       anomalia detectada → cria MS de bug_fix automaticamente
 ```
 
 ---
@@ -67,6 +75,13 @@ Se `perfil` não estiver definido: solicitar ao humano antes de prosseguir.
 * Perfil Standard/Enterprise: **gate humano obrigatório** — aguardar aprovação do ADR.
 * Após aprovação: aplicar starter tecnológico (`starters/<stack>/`) se existir, ou criar scaffold manualmente.
 * Aguardar `STATUS_ARCHITECTURE_CONCLUIDO`. Transitar para [SPEC].
+
+### 3.3-A — [ESTADO_TRIAGE] Triagem de Demanda (entrada de manutenção)
+* Ativado quando chega uma demanda nova durante o ciclo de manutenção evolutiva.
+* Invocar `docs/ThronusSpec/02_Setup/backlogTriageSkill.md` com o texto da demanda.
+* O skill classifica tipo, tamanho, prioridade e dependências automaticamente.
+* Se tamanho GG detectado: propor decomposição antes de inserir.
+* Após inserção no backlog: aguardar `STATUS_TRIAGE_COMPLETO` e transitar para [SPEC] com a MS recém-criada.
 
 ### 3.4 — [ESTADO_SPEC] Especificação de Micro Spec
 * Executar `docs/ThronusSpec/02_Setup/loadProjectPayloadSkill.md` (carrega payload_index.json + contexto relevante via Scout subagent).
@@ -109,6 +124,22 @@ Se `perfil` não estiver definido: solicitar ao humano antes de prosseguir.
   * Gerar mensagem Conventional Commits com MS-ID.
   * Executar `git add <arquivos_previstos>` (lista explícita — nunca `git add .`).
   * Executar `git commit -m "[MENSAGEM_GERADA]"`.
+* Verificar `payload_index.json → estado_da_trilha.cd_ativo`:
+  * Se `true`: transitar automaticamente para [DEPLOY].
+  * Se `false` ou ausente: encerrar em COMMIT. Deploy permanece manual.
+
+### 3.10 — [ESTADO_DEPLOY] Deploy Contínuo
+* Invocar `docs/ThronusSpec/02_Setup/deploySkill.md`.
+* O skill detecta o padrão de infra (`payload_index.json → arquitetura_e_padroes.infra`) e executa o procedimento adequado.
+* Health check pós-deploy: HTTP 200 em `/health/` (ou endpoint configurado).
+* Se health check OK: transitar automaticamente para [MONITOR].
+* Se health check falhou: emitir `STATUS_DEPLOY_FALHOU` → **[ABORT_DEPLOY]** (commit não é revertido — problema é de ambiente).
+
+### 3.11 — [ESTADO_MONITOR] Monitoramento Pós-Deploy
+* Invocar `docs/ThronusSpec/02_Setup/productionMonitorSkill.md`.
+* O skill verifica infra, integridade de dados de negócio e logs de erro.
+* Se tudo saudável: pipeline concluído com sucesso.
+* Se anomalia detectada: invocar `backlogTriageSkill.md` automaticamente → nova MS inserida no backlog com prioridade adequada.
 
 ---
 
@@ -123,6 +154,8 @@ Se `perfil` não estiver definido: solicitar ao humano antes de prosseguir.
   Rollbacks          : [nenhum | lista]
   Arquivos commitados: [lista explícita]
   Commit             : [mensagem]
+  Deploy             : [ok | não configurado | falhou]
+  Monitor            : [saudável | anomalias detectadas → MS-NNN criada]
   RAM                : LIMPA E VAZIA ✓
 ════════════════════════════════════════════════════════════
 ```
