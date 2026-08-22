@@ -9,6 +9,10 @@
 #   ./thronus-init.sh edutrack "Prefeitura de Salvador"
 #   ./thronus-init.sh migrador-dados "Secretaria de Fazenda" nano
 #   ./thronus-init.sh saude-api "SMS Bahia" micro ~/projetos/saude-api
+#
+# Pré-requisitos para criação automática do repo GitHub:
+#   - gh CLI autenticado (gh auth login)
+#   - Variável GITHUB_ORG definida abaixo ou via env
 
 set -euo pipefail
 
@@ -41,11 +45,15 @@ fi
 
 TEMPLATE_DIR="$(cd "$(dirname "$0")" && pwd)"
 TODAY="$(date +%Y-%m-%d)"
+GITHUB_ORG="${GITHUB_ORG:-diegoalvarez-AI}"
+TEMPLATE_REPO="thronus-template"
+TEMPLATE_VERSION="$(cd "$TEMPLATE_DIR" && git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")"
 
 echo "► Criando projeto '$PROJECT_NAME' para '$CLIENT_NAME'..."
 echo "  Perfil  : $PERFIL"
-echo "  Template: $TEMPLATE_DIR"
+echo "  Template: $TEMPLATE_DIR @ $TEMPLATE_VERSION"
 echo "  Destino : $DEST_DIR"
+echo "  GitHub  : github.com/${GITHUB_ORG}/${PROJECT_NAME}"
 echo ""
 
 # ── 1. Copiar template ────────────────────────────────────────────────────────
@@ -55,7 +63,7 @@ if [[ -d "$DEST_DIR" ]]; then
 fi
 cp -r "$TEMPLATE_DIR" "$DEST_DIR"
 cd "$DEST_DIR"
-rm -f thronus-init.sh  # Não propagar o script de init no projeto novo
+rm -f thronus-init.sh  # Não propagar o script de init no projeto derivado
 
 # ── 2. Substituir placeholders ────────────────────────────────────────────────
 find . -type f \( -name "*.py" -o -name "*.md" -o -name "*.json" -o -name "*.yml" \
@@ -132,14 +140,47 @@ if [[ -d "starters" ]]; then
   STARTERS_DISPONIVEIS=$(ls starters/ 2>/dev/null | tr '\n' ' ')
 fi
 
-# ── 6. Inicializar git ────────────────────────────────────────────────────────
+# ── 6. Registrar versão do template ──────────────────────────────────────────
+cat > ".thronus-template-version" <<EOF
+template_repo=https://github.com/${GITHUB_ORG}/${TEMPLATE_REPO}
+template_version=${TEMPLATE_VERSION}
+derived_at=${TODAY}
+project=${PROJECT_NAME}
+perfil=${PERFIL}
+EOF
+
+# ── 7. Inicializar git ────────────────────────────────────────────────────────
 git init -b main
 git add .
-git commit -m "chore: inicializa projeto ${PROJECT_NAME} (perfil: ${PERFIL}) a partir do thronus-template
+git commit -m "chore: inicializa projeto ${PROJECT_NAME} (perfil: ${PERFIL}) a partir do thronus-template@${TEMPLATE_VERSION}
 
 Co-Authored-By: Thronus TCA <noreply@thronus.dev>"
 
-# ── 7. Instalar pre-commit (se disponível e se .pre-commit-config.yaml existir) ──
+# ── 8. Criar repositório no GitHub e configurar remotes ──────────────────────
+if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+  echo "► Criando repositório no GitHub..."
+  gh repo create "${GITHUB_ORG}/${PROJECT_NAME}" \
+    --private \
+    --description "${PROJECT_NAME} — ${CLIENT_NAME} (Thronus TCA ${TEMPLATE_VERSION})" \
+    --source=. \
+    --remote=origin \
+    --push
+
+  # Adiciona thronus-template como upstream para receber atualizações futuras
+  git remote add upstream "https://github.com/${GITHUB_ORG}/${TEMPLATE_REPO}.git"
+  echo "  ✓ Remote 'upstream' configurado → github.com/${GITHUB_ORG}/${TEMPLATE_REPO}"
+  echo ""
+  echo "  Para sincronizar com uma nova versão do template:"
+  echo "    git fetch upstream"
+  echo "    git merge upstream/main --allow-unrelated-histories"
+else
+  echo "  ⚠ gh CLI não encontrado ou não autenticado. Configure manualmente:"
+  echo "    gh auth login"
+  echo "    gh repo create ${GITHUB_ORG}/${PROJECT_NAME} --private --source=. --remote=origin --push"
+  echo "    git remote add upstream https://github.com/${GITHUB_ORG}/${TEMPLATE_REPO}.git"
+fi
+
+# ── 9. Instalar pre-commit (se disponível e se .pre-commit-config.yaml existir) ──
 if [[ -f ".pre-commit-config.yaml" ]] && command -v pre-commit &>/dev/null; then
   pre-commit install
   echo "  ✓ pre-commit instalado"
@@ -149,15 +190,20 @@ fi
 echo ""
 echo "════════════════════════════════════════════════════════"
 echo "  [THRONUS-INIT] PROJETO CRIADO COM SUCESSO"
-echo "  Nome   : ${PROJECT_NAME}"
-echo "  Cliente: ${CLIENT_NAME}"
-echo "  Perfil : ${PERFIL}"
-echo "  Destino: ${DEST_DIR}"
+echo "  Nome       : ${PROJECT_NAME}"
+echo "  Cliente    : ${CLIENT_NAME}"
+echo "  Perfil     : ${PERFIL}"
+echo "  Template   : ${TEMPLATE_VERSION}"
+echo "  Destino    : ${DEST_DIR}"
+echo "  Repo       : github.com/${GITHUB_ORG}/${PROJECT_NAME}"
 echo ""
 echo "  Próximos passos:"
 echo "  1. cd ${DEST_DIR}"
 echo "  2. Abra o projeto no Claude Code"
 echo "  3. Acione: [ESTADO_DISCOVERY] para iniciar o pipeline TCA"
+echo ""
+echo "  Atualizar template no futuro:"
+echo "    git fetch upstream && git merge upstream/main"
 echo ""
 if [[ -n "$STARTERS_DISPONIVEIS" ]]; then
   echo "  Starters disponíveis (aplicar após [ESTADO_ARCHITECTURE]):"
