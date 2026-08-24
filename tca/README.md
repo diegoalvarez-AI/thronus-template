@@ -74,6 +74,48 @@ Com `--strict`, archive fora do núcleo obrigatório também reprova. Sem a flag
 — projetos existentes têm archives legados e o comando não deve travá-los antes da
 triagem.
 
+### `tca canon [--write]`
+
+Integridade do **conteúdo metodológico** — o que, alterado, muda o resultado que o método
+produz. Hoje cobre `docs/ThronusSpec/02_Setup/*.md` e `profiles/*.json`, declarados em
+`tca/CANON.sha256`.
+
+`--write` regenera o arquivo a partir do repositório; sem a flag, verifica. Dois
+manifestos, dois propósitos: `MANIFEST.sha256` guarda o código do pacote, `CANON.sha256`
+guarda a metodologia.
+
+### `tca doctor [--strict]`
+
+**O detector de inferência local.** Compara os arquivos de metodologia do projeto com o
+canon declarado e classifica cada um:
+
+| Saída | Significado |
+|---|---|
+| `DIVERGE` | arquivo existe e foi editado no projeto |
+| `AUSENTE` | arquivo do canon não existe aqui |
+| `EXTRA` | arquivo de metodologia não declarado no canon |
+| `OVERRIDE` | divergência declarada em `tca-overrides.json` — decisão, não acidente |
+
+Sem `--strict`, apenas relata e sai com zero: é o modo de migração, para o projeto poder
+adotar o pacote antes de ter triado as divergências. Com `--strict`, divergência não
+declarada reprova.
+
+Um override exige `arquivo`, `motivo` e `responsavel` — papel genérico não satisfaz o
+requisito de responsabilidade nomeada. Override incompleto é erro, não aviso:
+
+```json
+{
+  "overrides": [
+    {
+      "arquivo": "docs/ThronusSpec/02_Setup/discoverySkill.md",
+      "motivo": "domínio educacional exige levantamento de calendário letivo",
+      "responsavel": "Diego Alvarez",
+      "em": "2026-08-24"
+    }
+  ]
+}
+```
+
 ### `tca verify-self`
 
 Confere `MANIFEST.sha256` contra o conteúdo do pacote. A TCA é fonte canônica: precisa
@@ -124,6 +166,14 @@ Registradas em vez de preenchidas por inferência, conforme o invariante de prov
   mas seria schema inventado, então fica para quando houver especificação.
 - **Sem transação entre arquivos.** Cada escrita é atômica; o conjunto não é. `verify`
   detecta o estado parcial e o comando é idempotente, o que torna a recuperação trivial.
+- **`AGENTS.md` fica fora do canon.** O arquivo mistura metodologia (seções 0 a 4) e
+  conteúdo de projeto (nome, cliente, perfil, comandos), então não é hasheável inteiro —
+  divergiria em todo projeto derivado por construção. Separar as duas metades é
+  pré-requisito para incluí-lo, e é trabalho de etapa própria.
+- **`doctor` não compara com o upstream.** Ele responde "os arquivos deste projeto
+  conferem com o canon que veio junto?", não "esta TCA está atrasada em relação à
+  publicada". Detectar defasagem de versão exige o pacote consultar a origem, o que
+  depende de a distribuição existir.
 
 ## Testes
 

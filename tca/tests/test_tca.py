@@ -173,6 +173,67 @@ class TestVerify(Base):
         self.assertEqual(tca.main(["verify", "--strict"]), 1, "legado reprova em --strict")
 
 
+class TestCanonDoctor(unittest.TestCase):
+    """canon e doctor — detecção de inferência local."""
+
+    def setUp(self):
+        import os
+        self.dir = Path(tempfile.mkdtemp())
+        # projeto mínimo com cópia do conteúdo canônico declarado
+        (self.dir / "docs/ThronusSpec/03_Desenvolvimento").mkdir(parents=True)
+        (self.dir / P_INDEX).write_text('{"estado_da_trilha":{}}', encoding="utf-8")
+        raiz_tpl = PKG.parent
+        self.copiados = []
+        for nome in tca._ler_canon():
+            src = raiz_tpl / nome
+            dst = self.dir / nome
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            self.copiados.append(nome)
+        self._cwd = Path.cwd()
+        os.chdir(self.dir)
+
+    def tearDown(self):
+        import os
+        os.chdir(self._cwd)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_canon_do_template_confere(self):
+        self.assertEqual(tca.main(["canon"]), 0)
+
+    def test_copia_intacta_nao_diverge(self):
+        self.assertEqual(tca.main(["doctor", "--strict"]), 0)
+
+    def test_detecta_edicao_local(self):
+        alvo = self.dir / self.copiados[0]
+        alvo.write_text(alvo.read_text(encoding="utf-8") + "\n<!-- local -->\n", encoding="utf-8")
+        self.assertEqual(tca.main(["doctor"]), 0, "sem --strict é relatório")
+        self.assertEqual(tca.main(["doctor", "--strict"]), 1, "com --strict reprova")
+
+    def test_detecta_arquivo_ausente(self):
+        (self.dir / self.copiados[0]).unlink()
+        self.assertEqual(tca.main(["doctor", "--strict"]), 1)
+
+    def test_detecta_skill_extra_nao_declarada(self):
+        extra = self.dir / "docs/ThronusSpec/02_Setup/inventadoSkill.md"
+        extra.write_text("# skill local\n", encoding="utf-8")
+        self.assertEqual(tca.main(["doctor", "--strict"]), 1)
+
+    def test_override_declarado_nao_reprova(self):
+        alvo = self.copiados[0]
+        (self.dir / alvo).write_text("alterado\n", encoding="utf-8")
+        (self.dir / tca.P_OVERRIDES).write_text(json.dumps({"overrides": [
+            {"arquivo": alvo, "motivo": "adaptação do domínio", "responsavel": "Diego Alvarez"}
+        ]}), encoding="utf-8")
+        self.assertEqual(tca.main(["doctor", "--strict"]), 0)
+
+    def test_override_sem_responsavel_falha(self):
+        (self.dir / tca.P_OVERRIDES).write_text(json.dumps({"overrides": [
+            {"arquivo": "x", "motivo": "y"}
+        ]}), encoding="utf-8")
+        self.assertEqual(tca.main(["doctor"]), 2, "papel genérico não satisfaz")
+
+
 class TestPacote(unittest.TestCase):
     def test_manifesto_integro(self):
         self.assertEqual(tca.main(["verify-self"]), 0)

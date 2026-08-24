@@ -13,6 +13,8 @@ Comandos:
   tca verify-self                integridade do próprio pacote (MANIFEST.sha256)
   tca close-ms <MS-ID> [...]     fecha o ciclo de uma Micro Spec
   tca verify [--strict]          coerência dos artefatos de controle
+  tca canon [--write]            integridade do conteúdo metodológico
+  tca doctor [--strict]          divergência entre o projeto e o canon
 
 Todo comando emite registro de execução em
 docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl — portão que não
@@ -31,7 +33,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 PKG_DIR = Path(__file__).resolve().parent.parent
-MANIFEST = PKG_DIR / "MANIFEST.sha256"
+MANIFEST = PKG_DIR / "MANIFEST.sha256"     # integridade do código do pacote
+CANON = PKG_DIR / "CANON.sha256"           # integridade do conteúdo metodológico
 
 # ── Caminhos que o contrato possui ───────────────────────────────────────────
 P_INDEX = "docs/ThronusSpec/03_Desenvolvimento/payload_index.json"
@@ -45,6 +48,18 @@ P_CTX = "context/activeContext.md"
 ARCHIVE_CORE = ("ms", "titulo", "data_conclusao", "fase", "tca", "contexto_ativo")
 
 MS_RE = re.compile(r"^MS-\d{3,}$")
+
+# Conteúdo metodológico: o que, alterado, muda o resultado que o método produz.
+# Caminhos relativos à raiz do projeto — a mesma em template e derivados.
+# AGENTS.md fica de fora por ora: mistura método e projeto no mesmo arquivo,
+# e portanto não é hasheável inteiro. Lacuna declarada no README.
+CANON_GLOBS = (
+    "docs/ThronusSpec/02_Setup/*.md",
+    "profiles/*.json",
+)
+
+# Divergências deliberadas do projeto em relação ao canon.
+P_OVERRIDES = "tca-overrides.json"
 
 
 class TcaError(Exception):
@@ -352,6 +367,117 @@ def cmd_verify(args) -> int:
     return 1 if falhas else 0
 
 
+def _canon_arquivos(raiz: Path) -> list[Path]:
+    achados: list[Path] = []
+    for padrao in CANON_GLOBS:
+        achados.extend(sorted(raiz.glob(padrao)))
+    return achados
+
+
+def _ler_canon() -> dict[str, str]:
+    if not CANON.exists():
+        raise TcaError(f"CANON.sha256 ausente em {PKG_DIR}. Rode: tca canon --write")
+    mapa = {}
+    for linha in CANON.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith("#"):
+            continue
+        h, _, nome = linha.partition("  ")
+        mapa[nome] = h
+    return mapa
+
+
+def cmd_canon(args) -> int:
+    """Gera ou verifica o hash do conteúdo metodológico deste repositório."""
+    raiz = PKG_DIR.parent
+    arquivos = _canon_arquivos(raiz)
+    if not arquivos:
+        raise TcaError(f"nenhum conteúdo metodológico encontrado sob {raiz}")
+
+    if args.write:
+        linhas = [f"{sha256(f)}  {f.relative_to(raiz).as_posix()}" for f in arquivos]
+        CANON.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+        print(f"OK     CANON.sha256 escrito — {len(linhas)} arquivos")
+        return 0
+
+    esperado = _ler_canon()
+    reais = {f.relative_to(raiz).as_posix(): sha256(f) for f in arquivos}
+    falhas = []
+    for nome, h in esperado.items():
+        if nome not in reais:
+            falhas.append(f"ausente no repositório: {nome}")
+        elif reais[nome] != h:
+            falhas.append(f"hash divergente: {nome}")
+    for nome in reais.keys() - esperado.keys():
+        falhas.append(f"não declarado no canon: {nome}")
+    for f in falhas:
+        print(f"FALHA  {f}", file=sys.stderr)
+    print(f"{'FALHA' if falhas else 'OK':<6} conteúdo metodológico — {len(esperado)} arquivos declarados")
+    return 1 if falhas else 0
+
+
+def cmd_doctor(args) -> int:
+    """Divergência entre a metodologia deste projeto e o canon declarado.
+
+    É o detector de inferência local: desvio declarado em tca-overrides.json é
+    decisão registrada; desvio não declarado é divergência silenciosa.
+    """
+    raiz = achar_raiz(Path.cwd())
+    esperado = _ler_canon()
+
+    declarados = {}
+    ov_path = raiz / P_OVERRIDES
+    if ov_path.exists():
+        for o in ler_json(ov_path).get("overrides", []):
+            if not all(k in o for k in ("arquivo", "motivo", "responsavel")):
+                raise TcaError(
+                    f"{P_OVERRIDES}: todo override exige arquivo, motivo e responsavel. "
+                    "Papel genérico não satisfaz."
+                )
+            declarados[o["arquivo"]] = o
+
+    idem, divergentes, ausentes, extras, com_override = [], [], [], [], []
+    for nome, h in esperado.items():
+        alvo = raiz / nome
+        if not alvo.is_file():
+            (com_override if nome in declarados else ausentes).append(nome)
+        elif sha256(alvo) == h:
+            idem.append(nome)
+        else:
+            (com_override if nome in declarados else divergentes).append(nome)
+
+    for padrao in CANON_GLOBS:
+        for f in sorted(raiz.glob(padrao)):
+            nome = f.relative_to(raiz).as_posix()
+            if nome not in esperado:
+                extras.append(nome)
+
+    for n in divergentes:
+        print(f"DIVERGE  {n}")
+    for n in ausentes:
+        print(f"AUSENTE  {n}")
+    for n in extras:
+        print(f"EXTRA    {n}  (não declarado no canon)")
+    for n in com_override:
+        o = declarados[n]
+        print(f"OVERRIDE {n}  — {o['motivo']} ({o['responsavel']})")
+
+    nao_declarados = len(divergentes) + len(ausentes) + len(extras)
+    registrar_execucao(raiz, "doctor", "falha" if (nao_declarados and args.strict) else "ok", {
+        "identicos": len(idem), "divergentes": len(divergentes),
+        "ausentes": len(ausentes), "extras": len(extras),
+        "overrides": len(com_override), "strict": bool(args.strict),
+    })
+
+    estado = "FALHA" if (nao_declarados and args.strict) else "OK"
+    print(f"{estado:<6} metodologia — {len(idem)} idênticos · {nao_declarados} divergências "
+          f"não declaradas · {len(com_override)} overrides")
+    if nao_declarados and not args.strict:
+        print("       modo relatório. Use --strict para reprovar, ou declare em "
+              f"{P_OVERRIDES}.")
+    return 1 if (nao_declarados and args.strict) else 0
+
+
 # ── entrada ──────────────────────────────────────────────────────────────────
 
 def main(argv=None) -> int:
@@ -371,6 +497,14 @@ def main(argv=None) -> int:
     v = sub.add_parser("verify", help="coerência dos artefatos de controle")
     v.add_argument("--strict", action="store_true", help="núcleo de archive incompleto reprova")
     v.set_defaults(fn=cmd_verify)
+
+    k = sub.add_parser("canon", help="integridade do conteúdo metodológico")
+    k.add_argument("--write", action="store_true", help="regenera CANON.sha256 a partir do repositório")
+    k.set_defaults(fn=cmd_canon)
+
+    d = sub.add_parser("doctor", help="divergência entre o projeto e o canon")
+    d.add_argument("--strict", action="store_true", help="divergência não declarada reprova")
+    d.set_defaults(fn=cmd_doctor)
 
     args = p.parse_args(argv)
     try:
