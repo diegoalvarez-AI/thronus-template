@@ -1,7 +1,7 @@
 # Skill: tcaOrchestratorSkill (Metodologia TCA v2 — Pipeline Completo)
 
 ## 1. Objetivo Operacional
-Orquestrar o pipeline completo de desenvolvimento TCA desde a ideia inicial até o commit — cobrindo descoberta de negócio, modelagem funcional, decisão de arquitetura e ciclo TDD. O pipeline se adapta ao perfil de complexidade do projeto (profiles/nano.json, micro.json, standard.json, enterprise.json).
+Orquestrar o pipeline completo de desenvolvimento TCA desde a ideia inicial até o commit — cobrindo descoberta de negócio, modelagem funcional, decisão de arquitetura e ciclo TDD. O pipeline se adapta ao perfil de complexidade do projeto (profiles/nano.json, micro.json, agentes.json, standard.json, enterprise.json).
 
 ---
 
@@ -47,6 +47,17 @@ ROLLBACKS
 
 ## 3. Algoritmo de Execução
 
+> **Pré-requisito de harness.** Antes de executar, consultar o Contrato de Harness em `AGENTS.md → seção 0` e identificar quais capacidades (CAP-SEARCH, CAP-PLAN, CAP-GATE, CAP-SUBAGENT) o ambiente atual oferece. Onde faltar, aplicar o fallback previsto. Nenhuma fase pode ser pulada por ausência de capacidade opcional.
+
+### 3.0-A — Retomada (executar SEMPRE ao iniciar)
+O estado do pipeline vive em arquivos, não na sessão. Toda invocação começa relendo:
+
+1. `payload_index.json → estado_da_trilha.fase_atual` — a fase corrente.
+2. `context/activeContext.md` — vazio significa que não há MS ativa.
+3. `profiles/<perfil>.json` — quais fases valem para este projeto.
+
+Retomar da fase corrente, nunca do início. **Reexecutar uma fase é seguro**: antes de acrescentar qualquer registro a `payload_index.json`, a `payload_archive/` ou a `performance_logs.json`, verificar se a chave (`ms_id`, `adr_id`) já existe — existindo, atualizar em vez de acrescentar.
+
 ### 3.0 — Verificação de Perfil
 Ler `payload_index.json` campo `estado_da_trilha.perfil` para identificar o perfil ativo.
 Carregar `profiles/<perfil>.json` para determinar quais fases são obrigatórias, recomendadas ou ignoradas.
@@ -84,16 +95,16 @@ Se `perfil` não estiver definido: solicitar ao humano antes de prosseguir.
 * Após inserção no backlog: aguardar `STATUS_TRIAGE_COMPLETO` e transitar para [SPEC] com a MS recém-criada.
 
 ### 3.4 — [ESTADO_SPEC] Especificação de Micro Spec
-* Executar `docs/ThronusSpec/02_Setup/loadProjectPayloadSkill.md` (carrega payload_index.json + contexto relevante via Scout subagent).
+* Executar `docs/ThronusSpec/02_Setup/loadProjectPayloadSkill.md` (carrega payload_index.json + contexto relevante via leitura dirigida — **CAP-SEARCH**).
 * Selecionar a próxima MS pendente do backlog em `payload_index.json`.
 * Gerar spec completa em `context/activeContext.md` (cenários CT-XX, arquivos a criar/modificar, contratos).
 * Aguardar `STATUS_DOCUMENTACAO_LIBERADA`. Transitar para [PLAN].
 
 ### 3.5 — [ESTADO_PLAN] Planejamento Técnico
-* Ler `context/activeContext.md`, entrar em EnterPlanMode, estruturar estratégia técnica completa.
+* Ler `context/activeContext.md`, ativar o modo de plano do harness (**CAP-PLAN**; sem ele, escrever o plano na seção `## Plano` de `context/activeContext.md` e não tocar em arquivo produtivo até o gate) e estruturar a estratégia técnica completa.
 * Invocar `docs/ThronusSpec/02_Setup/evaluatePlanIntegritySkill.md` (MAX_ITERATIONS=3).
   * Se MAX_ITERATIONS atingido sem aprovação: emitir `STATUS_PLANO_REQUER_REVISAO_HUMANA` → **ROLLBACK [SPEC]** ou **ROLLBACK [FUNCTIONAL]** se lacuna de modelagem identificada.
-  * Se APROVADO: emitir sumário `[TCA_INTEGRITY_CHECK]` e **aguardar confirmação humana (uma linha de OK)**. Este é o único ponto de interação mandatória no ciclo TDD.
+  * Se APROVADO: emitir sumário `[TCA_INTEGRITY_CHECK]` e **aguardar confirmação humana (uma linha de OK)** — **CAP-GATE**. Harness sem pausa interativa encerra o turno aqui e retoma na invocação seguinte. Este é o único ponto de interação mandatória no ciclo TDD.
 * Após confirmação: transitar para [RED].
 
 ### 3.6 — [ESTADO_RED] TDD Red

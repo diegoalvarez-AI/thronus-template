@@ -24,7 +24,7 @@ Executar a inicialização de contexto ("Cold Start") de forma eficiente, carreg
 
 ### Passo 3.1: Identificar contratos relevantes para a MS ativa
 * Determinar quais contratos do archive são necessários para a MS em desenvolvimento (ex: se a MS usa `ConsolidacaoLoteService`, carregar `ms008.json`).
-* Usar **Agent Scout** para localizar dependências cirúrgicas: em vez de ler arquivos-alvo inteiros (ex: `admin.py` com 3k linhas), invocar o subagente Explore para retornar apenas o ponto de inserção:
+* Usar **leitura dirigida (CAP-SEARCH)** para localizar dependências cirúrgicas: em vez de ler arquivos-alvo inteiros (ex: um módulo com 3k linhas), delegar a um subagente de exploração — ou, sem ele, usar `grep -n` — para retornar apenas o ponto de inserção:
   ```
   "Localize em admin.py a classe [ClassName] e retorne: número da linha, superclasse, 
    e os 5 campos imediatamente antes e depois do ponto de inserção ideal para [nova_classe]."
@@ -41,8 +41,8 @@ Executar a inicialização de contexto ("Cold Start") de forma eficiente, carreg
 ## 4. Camada 3 — Cold Context (Demanda Explícita)
 
 * Arquivos `payload_archive/<ms_XXX>.json` de MSs históricas não relacionadas à MS ativa são carregados **somente se explicitamente necessário** para resolver uma dependência de contrato.
-* Arquivos de código fonte grandes (`models.py`, `admin.py`, `dashboard_views.py`) são lidos **somente pelo trecho identificado pelo Scout subagent**, nunca inteiros.
-* **Sentinela de contexto:** Antes de qualquer leitura de arquivo ≥ 200 linhas, estimar o custo em tokens. Se o total acumulado da sessão ultrapassar 40k tokens de leitura, preferir o Scout subagent ao invés da leitura direta.
+* Arquivos de código fonte grandes são lidos **somente na faixa de linhas identificada pela leitura dirigida (CAP-SEARCH)**, nunca inteiros.
+* **Sentinela de contexto:** Antes de qualquer leitura de arquivo ≥ 200 linhas, estimar o custo em tokens. Se o total acumulado da sessão ultrapassar 40k tokens de leitura, preferir a leitura dirigida (CAP-SEARCH) à leitura direta.
 
 ---
 

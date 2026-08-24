@@ -16,7 +16,7 @@ Executar o encerramento macro do produto quando a trilha de desenvolvimento atin
 * `docs/ThronusSpec/03_Desenvolvimento/payload_archive/` — contratos de todas as MSs entregues
 * `docs/ThronusSpec/01_Planejamento/Base referencial da especificacao/` — editais, contratos, especificações originais (se presentes)
 
-Usar Scout subagent para ler arquivos de código grandes (views, rotas, modelos) em vez de carregá-los inteiros.
+Usar leitura dirigida (CAP-SEARCH) para inspecionar arquivos de código grandes (views, rotas, modelos) em vez de carregá-los inteiros.
 
 ---
 
