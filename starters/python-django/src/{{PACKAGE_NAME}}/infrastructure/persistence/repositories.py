@@ -5,6 +5,6 @@ Padrão: cada classe implementa um Protocol da camada de aplicação usando o OR
 Os imports de modelos Django ficam aqui — não nos services — mantendo a camada de
 aplicação livre de dependências Django e testável sem banco.
 
-Ver: src/app/application/ports/ para as interfaces correspondentes.
+Ver: src/{{PACKAGE_NAME}}/application/ports/ para as interfaces correspondentes.
 """
 from __future__ import annotations

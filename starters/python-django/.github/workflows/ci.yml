@@ -1,3 +1,5 @@
+# CI do starter python-django. Complementa .github/workflows/governance.yml
+# (verificações de governança TCA, independentes de stack).
 name: CI
 
 on:
@@ -22,9 +24,6 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
-      - name: Install system dependencies
-        run: sudo apt-get install -y --no-install-recommends libzbar0 libgl1
-
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
@@ -36,4 +35,4 @@ jobs:
       - name: Tests — suíte completa (SQLite in-memory)
         run: pytest --tb=short -q
         env:
-          DJANGO_SETTINGS_MODULE: app.infrastructure.config.settings_test
+          DJANGO_SETTINGS_MODULE: "{{PACKAGE_NAME}}.infrastructure.config.settings_test"

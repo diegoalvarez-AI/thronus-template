@@ -119,7 +119,7 @@ LOGGING = {
     "loggers": {
         "django": {"handlers": ["console"], "level": "WARNING", "propagate": False},
         "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
-        "app": {"handlers": ["console"], "level": "DEBUG" if DEBUG else "INFO", "propagate": False},
+        "{{PACKAGE_NAME}}": {"handlers": ["console"], "level": "DEBUG" if DEBUG else "INFO", "propagate": False},
     },
 }
 

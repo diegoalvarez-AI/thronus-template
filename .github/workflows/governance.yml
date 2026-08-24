@@ -1,0 +1,110 @@
+# Governança TCA — verificações válidas para QUALQUER stack.
+#
+# Este workflow NÃO roda testes: até [ESTADO_ARCHITECTURE] o projeto não tem
+# stack definido. Os testes chegam com o starter aplicado
+# (ver starters/<stack>/.github/workflows/ci.yml).
+#
+# Roda tanto no thronus-template quanto nos projetos derivados. O marcador é
+# thronus-init.sh: ele existe só no template (o init o remove do derivado).
+# Checagens de projeto — placeholders resolvidos, perfil ativo — são puladas no
+# template, onde os placeholders são o conteúdo.
+name: TCA Governance
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detectar contexto
+        id: ctx
+        run: |
+          if [ -f thronus-init.sh ]; then
+            echo "is_template=true" >> "$GITHUB_OUTPUT"
+            echo "► rodando no thronus-template"
+          else
+            echo "is_template=false" >> "$GITHUB_OUTPUT"
+            echo "► rodando em projeto derivado"
+          fi
+
+      - name: Placeholders do template foram substituídos
+        if: steps.ctx.outputs.is_template == 'false'
+        run: |
+          # Exclusões deliberadas — nesses lugares o placeholder é o conteúdo:
+          #   starters/        template-dentro-de-template, resolvido por apply-starter.sh
+          #   apply-starter.sh os placeholders são os padrões que ele procura
+          hits=$(grep -rIl --exclude-dir=.git --exclude-dir=starters \
+                   --exclude=apply-starter.sh \
+                   -E '\{\{(PROJECT_NAME|PACKAGE_NAME|CLIENT_NAME|PERFIL|DATA_INICIO)\}\}' . || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Placeholders não substituídos por thronus-init.sh:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "✓ nenhum placeholder pendente"
+
+      - name: Artefatos TCA são JSON válido
+        run: |
+          fail=0
+          for f in docs/ThronusSpec/03_Desenvolvimento/payload_index.json \
+                   docs/ThronusSpec/05_Monitoramento/performance_logs.json \
+                   profiles/*.json; do
+            [ -f "$f" ] || continue
+            python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" \
+              || { echo "::error file=$f::JSON inválido"; fail=1; }
+          done
+          exit $fail
+
+      - name: Perfil ativo existe em profiles/
+        if: steps.ctx.outputs.is_template == 'false'
+        run: |
+          idx=docs/ThronusSpec/03_Desenvolvimento/payload_index.json
+          [ -f "$idx" ] || { echo "::error::$idx ausente"; exit 1; }
+          perfil=$(python3 -c "import json;print(json.load(open('$idx'))['estado_da_trilha']['perfil'])")
+          [ -f "profiles/${perfil}.json" ] \
+            || { echo "::error::perfil '${perfil}' sem profiles/${perfil}.json"; exit 1; }
+          echo "✓ perfil ativo: ${perfil}"
+
+      - name: Independência de harness
+        run: |
+          # A metodologia canônica vive em AGENTS.md. Nenhum outro artefato pode
+          # citar ferramenta de harness pelo nome — só as capacidades CAP-*.
+          # governance.yml se exclui: o padrão de busca contém os próprios termos.
+          [ -f AGENTS.md ] || { echo "::error::AGENTS.md ausente"; exit 1; }
+          hits=$(grep -rIn --exclude-dir=.git \
+                   --exclude=AGENTS.md --exclude=CLAUDE.md \
+                   --exclude=GEMINI.md --exclude=.cursorrules \
+                   --exclude=governance.yml \
+                   -E 'EnterPlanMode|Scout subagent|Agent Scout|Claude Code' . || true)
+          if [ -n "$hits" ]; then
+            echo "::error::referência a harness fora de AGENTS.md — use as capacidades CAP-*:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "✓ metodologia independente de harness"
+
+      - name: Conventional Commits nos commits novos
+        if: github.event_name == 'pull_request'
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          head=${{ github.event.pull_request.head.sha }}
+          fail=0
+          while read -r msg; do
+            [ -z "$msg" ] && continue
+            case "$msg" in
+              Merge*|Revert*) continue ;;
+            esac
+            echo "$msg" | grep -qE '^(feat|fix|refactor|test|docs|chore|perf|build|ci)(\([a-z0-9._/-]+\))?!?: .+' \
+              || { echo "::error::commit fora do padrão Conventional Commits: $msg"; fail=1; }
+          done < <(git log --format=%s "$base..$head")
+          exit $fail
