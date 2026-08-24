@@ -1,2 +1,3 @@
-A metodologia canônica deste repositório vive em AGENTS.md.
-Leia AGENTS.md antes de qualquer ação. Não duplique conteúdo aqui.
+A metodologia canônica deste repositório vive em AGENTS.md — leia antes de qualquer ação.
+AGENTS.md é gerado por `tca agents --write` a partir de tca/METODOLOGIA.md e PROJETO.md.
+Edite as fontes, nunca o gerado.

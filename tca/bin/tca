@@ -15,6 +15,7 @@ Comandos:
   tca verify [--strict]          coerência dos artefatos de controle
   tca canon [--write]            integridade do conteúdo metodológico
   tca doctor [--strict]          divergência entre o projeto e o canon
+  tca agents [--write]           gera/verifica o AGENTS.md
 
 Todo comando emite registro de execução em
 docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl — portão que não
@@ -51,12 +52,29 @@ MS_RE = re.compile(r"^MS-\d{3,}$")
 
 # Conteúdo metodológico: o que, alterado, muda o resultado que o método produz.
 # Caminhos relativos à raiz do projeto — a mesma em template e derivados.
-# AGENTS.md fica de fora por ora: mistura método e projeto no mesmo arquivo,
-# e portanto não é hasheável inteiro. Lacuna declarada no README.
 CANON_GLOBS = (
     "docs/ThronusSpec/02_Setup/*.md",
     "profiles/*.json",
+    "tca/METODOLOGIA.md",
 )
+
+# AGENTS.md é gerado: metodologia canônica + parte do projeto. Um harness sem
+# suporte a include precisa continuar lendo um arquivo só, então a concatenação
+# é material — mas verificada, o que a distingue de uma cópia editada à mão.
+P_METODOLOGIA = "tca/METODOLOGIA.md"
+P_PROJETO = "PROJETO.md"
+P_AGENTS = "AGENTS.md"
+
+CABECALHO_AGENTS = """<!--
+  GERADO por `tca agents --write` — não edite este arquivo.
+
+  Metodologia : tca/METODOLOGIA.md   (canônica, verificada por tca canon)
+  Projeto     : PROJETO.md           (editável, específico deste projeto)
+
+  Editar aqui é perda garantida na próxima geração.
+-->
+
+"""
 
 # Divergências deliberadas do projeto em relação ao canon.
 P_OVERRIDES = "tca-overrides.json"
@@ -345,7 +363,20 @@ def cmd_verify(args) -> int:
                 f"{p.name}: núcleo incompleto — faltam {', '.join(faltando)}"
             )
 
-    # 6. campos não deriváveis — lacuna declarada, não falha
+    # 6. AGENTS.md é conteúdo gerado — precisa estar em dia com suas fontes
+    if (raiz / P_METODOLOGIA).is_file() and (raiz / P_PROJETO).is_file():
+        alvo = raiz / P_AGENTS
+        try:
+            if not alvo.exists():
+                falhas.append(f"{P_AGENTS} ausente — rode: tca agents --write")
+            elif alvo.read_text(encoding="utf-8") != _agents_esperado(raiz):
+                falhas.append(
+                    f"{P_AGENTS} desatualizado ou editado à mão — rode: tca agents --write"
+                )
+        except TcaError as e:
+            falhas.append(str(e))
+
+    # 7. campos não deriváveis — lacuna declarada, não falha
     if "status_modulo_percentual" in estado:
         avisos.append(
             "status_modulo_percentual não é derivável: o schema não define campo de backlog. "
@@ -414,6 +445,45 @@ def cmd_canon(args) -> int:
         print(f"FALHA  {f}", file=sys.stderr)
     print(f"{'FALHA' if falhas else 'OK':<6} conteúdo metodológico — {len(esperado)} arquivos declarados")
     return 1 if falhas else 0
+
+
+def _agents_esperado(raiz: Path) -> str:
+    met = raiz / P_METODOLOGIA
+    prj = raiz / P_PROJETO
+    for f in (met, prj):
+        if not f.is_file():
+            raise TcaError(f"fonte ausente: {f.relative_to(raiz)}")
+    return (CABECALHO_AGENTS
+            + met.read_text(encoding="utf-8").rstrip()
+            + "\n\n---\n\n"
+            + prj.read_text(encoding="utf-8").lstrip())
+
+
+def cmd_agents(args) -> int:
+    """Gera o AGENTS.md a partir da metodologia canônica e da parte do projeto."""
+    # Funciona no template (que não tem payload_index) e no projeto derivado.
+    try:
+        raiz = achar_raiz(Path.cwd())
+    except TcaError:
+        raiz = PKG_DIR.parent
+    esperado = _agents_esperado(raiz)
+    alvo = raiz / P_AGENTS
+
+    if args.write:
+        alvo.write_text(esperado, encoding="utf-8")
+        print(f"OK     {P_AGENTS} gerado — {len(esperado.splitlines())} linhas")
+        return 0
+
+    atual = alvo.read_text(encoding="utf-8") if alvo.exists() else None
+    if atual is None:
+        print(f"FALHA  {P_AGENTS} não existe. Rode: tca agents --write", file=sys.stderr)
+        return 1
+    if atual != esperado:
+        print(f"FALHA  {P_AGENTS} está desatualizado ou foi editado à mão.", file=sys.stderr)
+        print(f"       Edite {P_METODOLOGIA} ou {P_PROJETO} e rode: tca agents --write", file=sys.stderr)
+        return 1
+    print(f"OK     {P_AGENTS} em dia com {P_METODOLOGIA} + {P_PROJETO}")
+    return 0
 
 
 def cmd_doctor(args) -> int:
@@ -501,6 +571,10 @@ def main(argv=None) -> int:
     k = sub.add_parser("canon", help="integridade do conteúdo metodológico")
     k.add_argument("--write", action="store_true", help="regenera CANON.sha256 a partir do repositório")
     k.set_defaults(fn=cmd_canon)
+
+    g = sub.add_parser("agents", help="gera/verifica o AGENTS.md")
+    g.add_argument("--write", action="store_true", help="regenera o AGENTS.md a partir das fontes")
+    g.set_defaults(fn=cmd_agents)
 
     d = sub.add_parser("doctor", help="divergência entre o projeto e o canon")
     d.add_argument("--strict", action="store_true", help="divergência não declarada reprova")

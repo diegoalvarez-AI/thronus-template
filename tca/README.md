@@ -64,6 +64,7 @@ ciclo que termina sem archive, sem log e sem limpar o contexto.
 
 Coerência dos artefatos de controle. Reprova quando:
 
+- `AGENTS.md` está ausente, desatualizado ou foi editado à mão;
 - `_archive.keys` diverge dos arquivos em disco;
 - há MS ativa no `activeContext` sem `micro_spec_ativa` no índice, ou o inverso — ciclo
   aberto sem registro, ou fechado sem limpeza;
@@ -116,6 +117,23 @@ requisito de responsabilidade nomeada. Override incompleto é erro, não aviso:
 }
 ```
 
+### `tca agents [--write]`
+
+Gera o `AGENTS.md` a partir de duas fontes e verifica que ele está em dia:
+
+| Fonte | Natureza |
+|---|---|
+| `tca/METODOLOGIA.md` | canônica, sem placeholders, coberta pelo `CANON.sha256` |
+| `PROJETO.md` | específica do projeto, com placeholders, editável |
+
+O `AGENTS.md` continua sendo **um arquivo só**, porque o padrão aberto não tem mecanismo
+de include e um harness que não suporte importação precisa ler tudo em um lugar. A
+concatenação é material, mas **verificada** — é isso que a distingue de uma cópia editada
+à mão. Editar o `AGENTS.md` diretamente reprova em `tca agents` e em `tca verify`.
+
+Para mudar a metodologia, edite `tca/METODOLOGIA.md` e rode `tca canon --write`. Para
+mudar o projeto, edite `PROJETO.md`. Depois, `tca agents --write`.
+
 ### `tca verify-self`
 
 Confere `MANIFEST.sha256` contra o conteúdo do pacote. A TCA é fonte canônica: precisa
@@ -166,10 +184,6 @@ Registradas em vez de preenchidas por inferência, conforme o invariante de prov
   mas seria schema inventado, então fica para quando houver especificação.
 - **Sem transação entre arquivos.** Cada escrita é atômica; o conjunto não é. `verify`
   detecta o estado parcial e o comando é idempotente, o que torna a recuperação trivial.
-- **`AGENTS.md` fica fora do canon.** O arquivo mistura metodologia (seções 0 a 4) e
-  conteúdo de projeto (nome, cliente, perfil, comandos), então não é hasheável inteiro —
-  divergiria em todo projeto derivado por construção. Separar as duas metades é
-  pré-requisito para incluí-lo, e é trabalho de etapa própria.
 - **`doctor` não compara com o upstream.** Ele responde "os arquivos deste projeto
   conferem com o canon que veio junto?", não "esta TCA está atrasada em relação à
   publicada". Detectar defasagem de versão exige o pacote consultar a origem, o que

@@ -75,6 +75,18 @@ jobs:
             || { echo "::error::perfil '${perfil}' sem profiles/${perfil}.json"; exit 1; }
           echo "✓ perfil ativo: ${perfil}"
 
+      - name: Portões da TCA (pacote executável)
+        run: |
+          ./tca/bin/tca version
+          ./tca/bin/tca verify-self
+          ./tca/bin/tca canon
+          ./tca/bin/tca agents
+          ./tca/bin/tca verify
+          ./tca/bin/tca doctor --strict
+
+      - name: Testes do pacote tca
+        run: python3 tca/tests/test_tca.py
+
       - name: Independência de harness
         run: |
           # A metodologia canônica vive em AGENTS.md. Nenhum outro artefato pode

@@ -234,6 +234,69 @@ class TestCanonDoctor(unittest.TestCase):
         self.assertEqual(tca.main(["doctor"]), 2, "papel genérico não satisfaz")
 
 
+class TestAgents(unittest.TestCase):
+    """AGENTS.md é conteúdo gerado — nunca editado à mão."""
+
+    def setUp(self):
+        import os
+        self.dir = Path(tempfile.mkdtemp())
+        (self.dir / "docs/ThronusSpec/03_Desenvolvimento").mkdir(parents=True)
+        (self.dir / P_INDEX).write_text('{"estado_da_trilha":{}}', encoding="utf-8")
+        (self.dir / "tca").mkdir()
+        (self.dir / tca.P_METODOLOGIA).write_text("# Metodologia\n\nregra canônica.\n", encoding="utf-8")
+        (self.dir / tca.P_PROJETO).write_text("# Projeto: demo\n\nconteúdo do projeto.\n", encoding="utf-8")
+        self._cwd = Path.cwd()
+        os.chdir(self.dir)
+
+    def tearDown(self):
+        import os
+        os.chdir(self._cwd)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_gera_e_verifica(self):
+        self.assertEqual(tca.main(["agents", "--write"]), 0)
+        texto = (self.dir / tca.P_AGENTS).read_text(encoding="utf-8")
+        self.assertIn("GERADO por", texto, "falta o marcador de geração")
+        self.assertIn("regra canônica", texto)
+        self.assertIn("conteúdo do projeto", texto)
+        self.assertEqual(tca.main(["agents"]), 0)
+
+    def test_edicao_manual_reprova(self):
+        tca.main(["agents", "--write"])
+        alvo = self.dir / tca.P_AGENTS
+        alvo.write_text(alvo.read_text(encoding="utf-8") + "\nlinha editada à mão\n", encoding="utf-8")
+        self.assertEqual(tca.main(["agents"]), 1)
+
+    def test_fonte_alterada_deixa_gerado_desatualizado(self):
+        tca.main(["agents", "--write"])
+        met = self.dir / tca.P_METODOLOGIA
+        met.write_text(met.read_text(encoding="utf-8") + "\nregra nova.\n", encoding="utf-8")
+        self.assertEqual(tca.main(["agents"]), 1, "AGENTS.md deve acusar defasagem")
+        self.assertEqual(tca.main(["agents", "--write"]), 0)
+        self.assertEqual(tca.main(["agents"]), 0)
+
+    def test_ausencia_reprova(self):
+        self.assertEqual(tca.main(["agents"]), 1)
+
+    def test_fonte_ausente_e_erro_explicito(self):
+        (self.dir / tca.P_PROJETO).unlink()
+        self.assertEqual(tca.main(["agents", "--write"]), 2)
+
+    def test_verify_reprova_agents_desatualizado(self):
+        # verify precisa dos artefatos de estado completos
+        (self.dir / "context").mkdir()
+        (self.dir / P_CTX).write_text("**MS ativa:** —\n", encoding="utf-8")
+        (self.dir / P_ARCHIVE).mkdir(parents=True)
+        (self.dir / P_INDEX).write_text(json.dumps({
+            "estado_da_trilha": {"micro_spec_ativa": None},
+            "_archive": {"keys": []},
+        }), encoding="utf-8")
+        tca.main(["agents", "--write"])
+        self.assertEqual(tca.main(["verify"]), 0)
+        (self.dir / tca.P_AGENTS).write_text("editado\n", encoding="utf-8")
+        self.assertEqual(tca.main(["verify"]), 1, "verify deve acusar AGENTS.md fora de dia")
+
+
 class TestPacote(unittest.TestCase):
     def test_manifesto_integro(self):
         self.assertEqual(tca.main(["verify-self"]), 0)
