@@ -15,10 +15,10 @@
     "entrypoints": [],
     "paths": {
       "_nota": "Adaptar ao layout do starter aplicado. Remover campos não aplicáveis.",
-      "src_root": "src/{{PROJECT_NAME}}/",
-      "domain": "src/{{PROJECT_NAME}}/domain/",
-      "application": "src/{{PROJECT_NAME}}/application/",
-      "infrastructure": "src/{{PROJECT_NAME}}/infrastructure/"
+      "src_root": "src/{{PACKAGE_NAME}}/",
+      "domain": "src/{{PACKAGE_NAME}}/domain/",
+      "application": "src/{{PACKAGE_NAME}}/application/",
+      "infrastructure": "src/{{PACKAGE_NAME}}/infrastructure/"
     }
   },
   "dependencias": {
@@ -40,6 +40,6 @@
   "_archive": {
     "path": "docs/ThronusSpec/03_Desenvolvimento/payload_archive/",
     "keys": [],
-    "nota": "Carregar apenas contratos relevantes para a MS ativa via Scout subagent."
+    "nota": "Carregar apenas contratos relevantes para a MS ativa, via leitura dirigida (CAP-SEARCH)."
   }
 }
