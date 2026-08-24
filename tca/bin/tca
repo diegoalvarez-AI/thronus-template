@@ -17,6 +17,7 @@ Comandos:
   tca doctor [--strict]          divergência entre o projeto e o canon
   tca agents [--write]           gera/verifica o AGENTS.md
   tca lock [--write]             fixa a origem e o hash do canon instalado
+  tca update [--apply]           confere/aplica versão nova a partir da origem
 
 Todo comando emite registro de execução em
 docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl — portão que não
@@ -496,8 +497,10 @@ def _git(raiz: Path, *args: str) -> str | None:
     import subprocess
     try:
         r = subprocess.run(["git", "-C", str(raiz), *args],
-                           capture_output=True, text=True, timeout=10)
-        return r.stdout.strip() or None if r.returncode == 0 else None
+                           capture_output=True, text=True, timeout=120)
+        # None significa falha. Sucesso sem saída devolve "" — `git clone --quiet`
+        # não imprime nada, e confundir os dois quebrava o --apply.
+        return r.stdout.strip() if r.returncode == 0 else None
     except Exception:
         return None
 
@@ -541,6 +544,112 @@ def cmd_lock(args) -> int:
               f"fixado {str(d.get('canon_sha256'))[:12]}, atual {atual[:12]}", file=sys.stderr)
         return 1
     print(f"OK     canon confere com o instalado ({atual[:12]})")
+    return 0
+
+
+def _semver(tag: str) -> tuple[int, int, int] | None:
+    m = re.match(r"^v?(\d+)\.(\d+)\.(\d+)$", tag)
+    return tuple(int(x) for x in m.groups()) if m else None
+
+
+def _tags_remotas(origem: str) -> list[tuple[tuple[int, int, int], str]]:
+    saida = _git(Path.cwd(), "ls-remote", "--tags", origem)
+    if saida is None:
+        raise TcaError(f"não foi possível listar tags de {origem}")
+    achadas = []
+    for linha in saida.splitlines():
+        _, _, ref = linha.partition("refs/tags/")
+        ref = ref.strip().removesuffix("^{}")
+        v = _semver(ref)
+        if v and (v, ref) not in achadas:
+            achadas.append((v, ref))
+    return sorted(achadas)
+
+
+def cmd_update(args) -> int:
+    """Confere defasagem em relação à origem declarada no lock, e opcionalmente aplica."""
+    import shutil as _sh
+    import tempfile as _tmp
+
+    try:
+        raiz = achar_raiz(Path.cwd())
+    except TcaError:
+        raiz = PKG_DIR.parent
+    lock_path = raiz / P_LOCK
+    if not lock_path.exists():
+        raise TcaError(f"{P_LOCK} ausente — sem procedência declarada não há o que atualizar.")
+    lock = ler_json(lock_path).get("tca", {})
+    origem = lock.get("origem")
+    if not origem or origem == "desconhecida":
+        raise TcaError(f"{P_LOCK} não declara origem utilizável.")
+
+    tags = _tags_remotas(origem)
+    if not tags:
+        print(f"AVISO  nenhuma tag de versão em {origem}")
+        return 0
+    ultima_v, ultima_tag = tags[-1]
+    instalada = _semver(str(lock.get("versao", ""))) or (0, 0, 0)
+
+    print(f"       instalada  {lock.get('versao')} · ref {str(lock.get('ref'))[:12]}")
+    print(f"       disponível {ultima_tag}")
+
+    if instalada >= ultima_v:
+        print("OK     metodologia em dia")
+        registrar_execucao(raiz, "update", "ok", {"instalada": lock.get("versao"), "disponivel": ultima_tag})
+        return 0
+
+    print(f"ATRASO metodologia {lock.get('versao')} atrás de {ultima_tag}")
+    if not args.apply:
+        print("       Use --apply para atualizar, ou fixe a versão deliberadamente.")
+        registrar_execucao(raiz, "update", "atraso", {"instalada": lock.get("versao"), "disponivel": ultima_tag})
+        return 1
+
+    # Aplicar sobrescreve conteúdo metodológico: divergência não declarada seria
+    # perdida em silêncio. Recusa antes de destruir.
+    declarados = set()
+    ov = raiz / P_OVERRIDES
+    if ov.exists():
+        declarados = {o["arquivo"] for o in ler_json(ov).get("overrides", [])}
+    sujos = [n for n, h in _ler_canon().items()
+             if n not in declarados and (raiz / n).is_file() and sha256(raiz / n) != h]
+    if sujos:
+        print("FALHA  divergência não declarada impediria a atualização — "
+              "seria perdida em silêncio:", file=sys.stderr)
+        for n in sujos:
+            print(f"       {n}", file=sys.stderr)
+        print("       Declare em tca-overrides.json ou reverta antes de atualizar.", file=sys.stderr)
+        return 1
+
+    tmpdir = Path(_tmp.mkdtemp())
+    try:
+        if _git(Path.cwd(), "clone", "--quiet", "--depth", "1", "--branch", ultima_tag,
+                origem, str(tmpdir / "origem")) is None:
+            raise TcaError(f"falha ao obter {ultima_tag} de {origem}")
+        novo = tmpdir / "origem"
+        preservados, atualizados = [], []
+        for rel in [*_canon_arquivos(novo), *(novo / "tca").rglob("*")]:
+            if not rel.is_file():
+                continue
+            nome = rel.relative_to(novo).as_posix()
+            if nome in declarados:
+                preservados.append(nome)
+                continue
+            destino = raiz / nome
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            _sh.copy2(rel, destino)
+            atualizados.append(nome)
+        for n in preservados:
+            print(f"PRESERVA {n}  (override declarado)")
+        print(f"OK     {len(atualizados)} arquivos atualizados para {ultima_tag}")
+    finally:
+        _sh.rmtree(tmpdir, ignore_errors=True)
+
+    escrever_json(lock_path, {"tca": {
+        "origem": origem, "versao": ultima_tag.lstrip("v"), "ref": ultima_tag,
+        "canon_sha256": sha256(CANON), "instalado_em": hoje(),
+    }})
+    print(f"       {P_LOCK} atualizado. Rode: tca agents --write && tca doctor --strict")
+    registrar_execucao(raiz, "update", "aplicado", {"para": ultima_tag, "arquivos": len(atualizados)})
     return 0
 
 
@@ -654,6 +763,10 @@ def main(argv=None) -> int:
     l.add_argument("--origem", help="URL de origem da metodologia")
     l.add_argument("--ref", help="commit ou tag da versão instalada")
     l.set_defaults(fn=cmd_lock)
+
+    u = sub.add_parser("update", help="confere/aplica versão nova a partir da origem")
+    u.add_argument("--apply", action="store_true", help="baixa e aplica a última versão")
+    u.set_defaults(fn=cmd_update)
 
     d = sub.add_parser("doctor", help="divergência entre o projeto e o canon")
     d.add_argument("--strict", action="store_true", help="divergência não declarada reprova")

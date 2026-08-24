@@ -148,6 +148,22 @@ declarada.
 identidade do **projeto** (nome, cliente, perfil, starter) e é consumido pelo
 `apply-starter.sh`; o segundo guarda a procedência da **metodologia**.
 
+### `tca update [--apply]`
+
+Confere se a metodologia instalada está atrás da origem declarada no lock, e opcionalmente
+aplica a versão nova. A distribuição é por **tag git**: `tca update` lista as tags de
+versão da origem e compara com o que o lock registra.
+
+Sem `--apply`, só reporta e sai com 1 quando há atraso. Com `--apply`:
+
+- **recusa** se houver divergência não declarada — atualizar sobrescreveria conteúdo
+  metodológico, e perder edição local em silêncio é pior que não atualizar;
+- **preserva** os arquivos com override declarado, listando cada um;
+- reescreve o `tca.lock.json` com a versão, a ref e o novo hash do canon.
+
+Depois de aplicar, rode `tca agents --write` (a metodologia mudou, o gerado precisa
+acompanhar) e `tca doctor --strict`.
+
 ### `tca verify-self`
 
 Confere `MANIFEST.sha256` contra o conteúdo do pacote. A TCA é fonte canônica: precisa

@@ -351,6 +351,78 @@ class TestLock(unittest.TestCase):
         self.assertEqual(tca.main(["lock"]), 1, "lock deve acusar canon divergente")
 
 
+class TestUpdate(unittest.TestCase):
+    """update contra uma origem git local — sem rede."""
+
+    @staticmethod
+    def _git(cwd, *args):
+        import subprocess
+        subprocess.run(["git", "-C", str(cwd), *args], check=True,
+                       capture_output=True, text=True)
+
+    def setUp(self):
+        import os
+        self.dir = Path(tempfile.mkdtemp())
+        tpl = PKG.parent
+        self.origem = self.dir / "origem"
+        shutil.copytree(tpl, self.origem, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+        self._git(self.origem, "init", "-q", "-b", "main")
+        self._git(self.origem, "add", "-A")
+        self._git(self.origem, "-c", "user.email=t@t", "-c", "user.name=t",
+                  "commit", "-qm", "origem")
+        self._git(self.origem, "tag", "v9.9.9")
+
+        self.proj = self.dir / "proj"
+        shutil.copytree(tpl, self.proj, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+        lock = self.proj / tca.P_LOCK
+        d = json.loads(lock.read_text(encoding="utf-8"))
+        d["tca"]["origem"] = str(self.origem)
+        d["tca"]["versao"] = "0.1.0"
+        lock.write_text(json.dumps(d), encoding="utf-8")
+
+        self._cwd = Path.cwd()
+        os.chdir(self.proj)
+
+    def tearDown(self):
+        import os
+        os.chdir(self._cwd)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _skill(self, nome="docs/ThronusSpec/02_Setup/deploySkill.md"):
+        return self.proj / nome
+
+    def test_detecta_atraso(self):
+        self.assertEqual(tca.main(["update"]), 1, "versão atrás da origem deve acusar")
+
+    def test_recusa_apply_com_divergencia_nao_declarada(self):
+        alvo = self._skill()
+        alvo.write_text(alvo.read_text(encoding="utf-8") + "\n<!-- local -->\n", encoding="utf-8")
+        self.assertEqual(tca.main(["update", "--apply"]), 1,
+                         "não pode sobrescrever divergência não declarada")
+        d = json.loads((self.proj / tca.P_LOCK).read_text(encoding="utf-8"))["tca"]
+        self.assertEqual(d["versao"], "0.1.0", "lock não pode avançar numa recusa")
+
+    def test_apply_atualiza_e_preserva_override(self):
+        alvo = self._skill()
+        marcado = alvo.read_text(encoding="utf-8") + "\n<!-- adaptação do projeto -->\n"
+        alvo.write_text(marcado, encoding="utf-8")
+        (self.proj / tca.P_OVERRIDES).write_text(json.dumps({"overrides": [{
+            "arquivo": "docs/ThronusSpec/02_Setup/deploySkill.md",
+            "motivo": "infra do cliente", "responsavel": "Diego Alvarez",
+        }]}), encoding="utf-8")
+
+        self.assertEqual(tca.main(["update", "--apply"]), 0)
+        self.assertEqual(alvo.read_text(encoding="utf-8"), marcado,
+                         "override declarado não pode ser sobrescrito")
+        d = json.loads((self.proj / tca.P_LOCK).read_text(encoding="utf-8"))["tca"]
+        self.assertEqual(d["versao"], "9.9.9")
+        self.assertEqual(tca.main(["update"]), 0, "depois de aplicar, deve estar em dia")
+
+    def test_sem_lock_e_erro_explicito(self):
+        (self.proj / tca.P_LOCK).unlink()
+        self.assertEqual(tca.main(["update"]), 2)
+
+
 class TestPacote(unittest.TestCase):
     def test_manifesto_integro(self):
         self.assertEqual(tca.main(["verify-self"]), 0)
