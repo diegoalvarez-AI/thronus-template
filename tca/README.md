@@ -134,6 +134,20 @@ concatenação é material, mas **verificada** — é isso que a distingue de um
 Para mudar a metodologia, edite `tca/METODOLOGIA.md` e rode `tca canon --write`. Para
 mudar o projeto, edite `PROJETO.md`. Depois, `tca agents --write`.
 
+### `tca lock [--write] [--origem URL] [--ref SHA]`
+
+Fixa a **procedência da metodologia instalada** em `tca.lock.json`: origem, versão, ref e
+— o campo que importa — o `sha256` do próprio `CANON.sha256`.
+
+Sem isso há um buraco: quem edita um skill **e** roda `tca canon --write` deixa o `doctor`
+verde, porque o canon guarda a metodologia e nada guardaria o canon. Com o lock, o
+`doctor` detecta que o canon foi regenerado localmente e trata isso como divergência não
+declarada.
+
+`.thronus-template-version` e `tca.lock.json` não se sobrepõem: o primeiro guarda a
+identidade do **projeto** (nome, cliente, perfil, starter) e é consumido pelo
+`apply-starter.sh`; o segundo guarda a procedência da **metodologia**.
+
 ### `tca verify-self`
 
 Confere `MANIFEST.sha256` contra o conteúdo do pacote. A TCA é fonte canônica: precisa

@@ -54,6 +54,7 @@ TODAY="$(date +%Y-%m-%d)"
 GITHUB_ORG="${GITHUB_ORG:-diegoalvarez-AI}"
 TEMPLATE_REPO="thronus-template"
 TEMPLATE_VERSION="$(cd "$TEMPLATE_DIR" && git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")"
+TEMPLATE_REF="$(cd "$TEMPLATE_DIR" && git rev-parse HEAD 2>/dev/null || echo "desconhecida")"
 
 echo "► Criando projeto '$PROJECT_NAME' para '$CLIENT_NAME'..."
 echo "  Perfil  : $PERFIL"
@@ -175,6 +176,17 @@ client=${CLIENT_NAME}
 perfil=${PERFIL}
 starter=
 EOF
+
+# ── 6-A. Fixar a procedência da metodologia ──────────────────────────────────
+# .thronus-template-version guarda a identidade do PROJETO (nome, cliente, perfil)
+# e é consumido por apply-starter.sh. O tca.lock.json guarda a procedência da
+# METODOLOGIA: origem, versão, ref e o hash do canon instalado. São coisas
+# distintas e ficam em arquivos distintos.
+if [[ -x "tca/bin/tca" ]]; then
+  ./tca/bin/tca lock --write \
+    --origem "https://github.com/${GITHUB_ORG}/${TEMPLATE_REPO}" \
+    --ref "${TEMPLATE_REF}"
+fi
 
 # ── 7. Inicializar git ────────────────────────────────────────────────────────
 [[ -d .git ]] || git init -b main

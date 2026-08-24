@@ -81,6 +81,7 @@ jobs:
           ./tca/bin/tca verify-self
           ./tca/bin/tca canon
           ./tca/bin/tca agents
+          ./tca/bin/tca lock
           ./tca/bin/tca verify
           ./tca/bin/tca doctor --strict
 

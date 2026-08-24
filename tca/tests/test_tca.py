@@ -297,6 +297,60 @@ class TestAgents(unittest.TestCase):
         self.assertEqual(tca.main(["verify"]), 1, "verify deve acusar AGENTS.md fora de dia")
 
 
+class TestLock(unittest.TestCase):
+    """O lock fixa o canon: sem ele, regenerar o canon esconde toda divergência."""
+
+    def setUp(self):
+        import os
+        self.dir = Path(tempfile.mkdtemp())
+        (self.dir / "docs/ThronusSpec/03_Desenvolvimento").mkdir(parents=True)
+        (self.dir / P_INDEX).write_text('{"estado_da_trilha":{}}', encoding="utf-8")
+        raiz_tpl = PKG.parent
+        self.copiados = []
+        for nome in tca._ler_canon():
+            src, dst = raiz_tpl / nome, self.dir / nome
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            self.copiados.append(nome)
+        self._cwd = Path.cwd()
+        os.chdir(self.dir)
+
+    def tearDown(self):
+        import os
+        os.chdir(self._cwd)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_escreve_e_confere(self):
+        self.assertEqual(tca.main(["lock", "--write", "--origem", "http://x", "--ref", "abc123"]), 0)
+        d = json.loads((self.dir / tca.P_LOCK).read_text(encoding="utf-8"))["tca"]
+        self.assertEqual(d["origem"], "http://x")
+        self.assertEqual(d["ref"], "abc123")
+        self.assertEqual(len(d["canon_sha256"]), 64)
+        self.assertEqual(tca.main(["lock"]), 0)
+
+    def test_lock_ausente_reprova(self):
+        self.assertEqual(tca.main(["lock"]), 1)
+
+    def test_detecta_canon_regenerado(self):
+        """O caso que motivou o lock: o canon deixou de ser o que foi instalado.
+
+        A condição observável é sha256(CANON) != lock.canon_sha256 — não importa
+        se veio de `canon --write` ou de edição direta. O teste a produz sem
+        tocar no repositório real.
+        """
+        tca.main(["lock", "--write", "--origem", "http://x", "--ref", "abc"])
+        self.assertEqual(tca.main(["doctor", "--strict"]), 0, "estado limpo")
+
+        lock_path = self.dir / tca.P_LOCK
+        d = json.loads(lock_path.read_text(encoding="utf-8"))
+        d["tca"]["canon_sha256"] = "0" * 64
+        lock_path.write_text(json.dumps(d), encoding="utf-8")
+
+        self.assertEqual(tca.main(["doctor", "--strict"]), 1,
+                         "canon diferente do instalado é divergência não declarada")
+        self.assertEqual(tca.main(["lock"]), 1, "lock deve acusar canon divergente")
+
+
 class TestPacote(unittest.TestCase):
     def test_manifesto_integro(self):
         self.assertEqual(tca.main(["verify-self"]), 0)

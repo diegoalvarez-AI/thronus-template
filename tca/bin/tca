@@ -16,6 +16,7 @@ Comandos:
   tca canon [--write]            integridade do conteúdo metodológico
   tca doctor [--strict]          divergência entre o projeto e o canon
   tca agents [--write]           gera/verifica o AGENTS.md
+  tca lock [--write]             fixa a origem e o hash do canon instalado
 
 Todo comando emite registro de execução em
 docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl — portão que não
@@ -78,6 +79,11 @@ CABECALHO_AGENTS = """<!--
 
 # Divergências deliberadas do projeto em relação ao canon.
 P_OVERRIDES = "tca-overrides.json"
+
+# Procedência da metodologia instalada. Fixa o hash do próprio CANON.sha256:
+# sem isso, quem edita um skill e roda `tca canon --write` fica verde, porque o
+# canon guarda a metodologia e nada guardaria o canon.
+P_LOCK = "tca.lock.json"
 
 
 class TcaError(Exception):
@@ -486,6 +492,58 @@ def cmd_agents(args) -> int:
     return 0
 
 
+def _git(raiz: Path, *args: str) -> str | None:
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", str(raiz), *args],
+                           capture_output=True, text=True, timeout=10)
+        return r.stdout.strip() or None if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def cmd_lock(args) -> int:
+    """Registra de onde veio a metodologia instalada e qual canon foi instalado."""
+    try:
+        raiz = achar_raiz(Path.cwd())
+    except TcaError:
+        raiz = PKG_DIR.parent
+    lock_path = raiz / P_LOCK
+
+    if not CANON.exists():
+        raise TcaError("CANON.sha256 ausente — não há o que fixar. Rode: tca canon --write")
+
+    if args.write:
+        origem = args.origem or _git(raiz, "remote", "get-url", "origin") or "desconhecida"
+        ref = args.ref or _git(raiz, "rev-parse", "HEAD") or "desconhecida"
+        dados = {
+            "tca": {
+                "origem": origem,
+                "versao": versao_pacote(),
+                "ref": ref,
+                "canon_sha256": sha256(CANON),
+                "instalado_em": hoje(),
+            }
+        }
+        escrever_json(lock_path, dados)
+        print(f"OK     {P_LOCK} escrito — tca {dados['tca']['versao']} · canon {dados['tca']['canon_sha256'][:12]}")
+        return 0
+
+    if not lock_path.exists():
+        print(f"FALHA  {P_LOCK} ausente. Rode: tca lock --write", file=sys.stderr)
+        return 1
+    d = ler_json(lock_path).get("tca", {})
+    atual = sha256(CANON)
+    print(f"       origem   {d.get('origem')}")
+    print(f"       versão   {d.get('versao')} · ref {str(d.get('ref'))[:12]}")
+    if d.get("canon_sha256") != atual:
+        print(f"FALHA  canon divergente do instalado — "
+              f"fixado {str(d.get('canon_sha256'))[:12]}, atual {atual[:12]}", file=sys.stderr)
+        return 1
+    print(f"OK     canon confere com o instalado ({atual[:12]})")
+    return 0
+
+
 def cmd_doctor(args) -> int:
     """Divergência entre a metodologia deste projeto e o canon declarado.
 
@@ -505,6 +563,14 @@ def cmd_doctor(args) -> int:
                     "Papel genérico não satisfaz."
                 )
             declarados[o["arquivo"]] = o
+
+    # O canon regenerado localmente esconderia toda divergência de arquivo.
+    canon_regenerado = False
+    lock_path = raiz / P_LOCK
+    if lock_path.exists():
+        fixado = ler_json(lock_path).get("tca", {}).get("canon_sha256")
+        if fixado and fixado != sha256(CANON):
+            canon_regenerado = True
 
     idem, divergentes, ausentes, extras, com_override = [], [], [], [], []
     for nome, h in esperado.items():
@@ -532,11 +598,18 @@ def cmd_doctor(args) -> int:
         o = declarados[n]
         print(f"OVERRIDE {n}  — {o['motivo']} ({o['responsavel']})")
 
-    nao_declarados = len(divergentes) + len(ausentes) + len(extras)
+    if canon_regenerado:
+        print("CANON    tca/CANON.sha256 foi regenerado neste projeto — "
+              "o hash não confere com o fixado em tca.lock.json")
+        print("         Metodologia alterada localmente. Declare override ou "
+              "atualize a versão da TCA.")
+
+    nao_declarados = len(divergentes) + len(ausentes) + len(extras) + int(canon_regenerado)
     registrar_execucao(raiz, "doctor", "falha" if (nao_declarados and args.strict) else "ok", {
         "identicos": len(idem), "divergentes": len(divergentes),
         "ausentes": len(ausentes), "extras": len(extras),
-        "overrides": len(com_override), "strict": bool(args.strict),
+        "overrides": len(com_override), "canon_regenerado": canon_regenerado,
+        "strict": bool(args.strict),
     })
 
     estado = "FALHA" if (nao_declarados and args.strict) else "OK"
@@ -575,6 +648,12 @@ def main(argv=None) -> int:
     g = sub.add_parser("agents", help="gera/verifica o AGENTS.md")
     g.add_argument("--write", action="store_true", help="regenera o AGENTS.md a partir das fontes")
     g.set_defaults(fn=cmd_agents)
+
+    l = sub.add_parser("lock", help="fixa a origem e o hash do canon instalado")
+    l.add_argument("--write", action="store_true", help="escreve o tca.lock.json")
+    l.add_argument("--origem", help="URL de origem da metodologia")
+    l.add_argument("--ref", help="commit ou tag da versão instalada")
+    l.set_defaults(fn=cmd_lock)
 
     d = sub.add_parser("doctor", help="divergência entre o projeto e o canon")
     d.add_argument("--strict", action="store_true", help="divergência não declarada reprova")
