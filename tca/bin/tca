@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+"""
+tca — CLI da Thronus Context Architecture.
+
+Metodologia como artefato executável: os comandos aqui são a forma operante
+dos portões que os skills descrevem em prosa.
+
+Dependências: Python 3.8+ e a biblioteca padrão. Nada mais — a TCA é agnóstica
+de stack e não pode impor runtime ao projeto que governa.
+
+Comandos:
+  tca version                    versão e hash do pacote
+  tca verify-self                integridade do próprio pacote (MANIFEST.sha256)
+  tca close-ms <MS-ID> [...]     fecha o ciclo de uma Micro Spec
+  tca verify [--strict]          coerência dos artefatos de controle
+
+Todo comando emite registro de execução em
+docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl — portão que não
+registra execução não é portão (ÂNCORA, invariante "portão executado").
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+PKG_DIR = Path(__file__).resolve().parent.parent
+MANIFEST = PKG_DIR / "MANIFEST.sha256"
+
+# ── Caminhos que o contrato possui ───────────────────────────────────────────
+P_INDEX = "docs/ThronusSpec/03_Desenvolvimento/payload_index.json"
+P_ARCHIVE = "docs/ThronusSpec/03_Desenvolvimento/payload_archive"
+P_LOGS = "docs/ThronusSpec/05_Monitoramento/performance_logs.json"
+P_EXEC = "docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl"
+P_CTX = "context/activeContext.md"
+
+# Núcleo obrigatório do registro de archive. É o único contrato que a TCA
+# possui sobre esse arquivo; tudo mais vive em `extensao`, livre para o projeto.
+ARCHIVE_CORE = ("ms", "titulo", "data_conclusao", "fase", "tca", "contexto_ativo")
+
+MS_RE = re.compile(r"^MS-\d{3,}$")
+
+
+class TcaError(Exception):
+    """Erro de uso ou de estado. Mensagem vai para stderr, exit != 0."""
+
+
+# ── utilidades ───────────────────────────────────────────────────────────────
+
+def agora() -> str:
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def hoje() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for bloco in iter(lambda: fh.read(65536), b""):
+            h.update(bloco)
+    return h.hexdigest()
+
+
+def versao_pacote() -> str:
+    f = PKG_DIR / "VERSION"
+    return f.read_text(encoding="utf-8").strip() if f.exists() else "desconhecida"
+
+
+def hash_manifesto() -> str:
+    return sha256(MANIFEST)[:12] if MANIFEST.exists() else "sem-manifesto"
+
+
+def achar_raiz(inicio: Path) -> Path:
+    """Sobe até encontrar o payload_index.json. Falha explícita se não achar."""
+    atual = inicio.resolve()
+    for cand in [atual, *atual.parents]:
+        if (cand / P_INDEX).is_file():
+            return cand
+    raise TcaError(
+        f"{P_INDEX} não encontrado a partir de {inicio}.\n"
+        "Este comando roda dentro de um projeto TCA."
+    )
+
+
+def ler_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise TcaError(f"arquivo ausente: {path}")
+    except json.JSONDecodeError as e:
+        raise TcaError(f"JSON inválido em {path}: {e}")
+
+
+def escrever_json(path: Path, dados) -> None:
+    """Escrita atômica por arquivo: tmp + replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tca-tmp")
+    tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def registrar_execucao(raiz: Path, comando: str, resultado: str, detalhes: dict) -> None:
+    """Evidência de execução. Append-only, uma linha JSON por invocação."""
+    registro = {
+        "ts": agora(),
+        "comando": comando,
+        "resultado": resultado,
+        "tca_versao": versao_pacote(),
+        "tca_manifesto": hash_manifesto(),
+        "detalhes": detalhes,
+    }
+    destino = raiz / P_EXEC
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with destino.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(registro, ensure_ascii=False) + "\n")
+
+
+# ── activeContext ────────────────────────────────────────────────────────────
+
+def ms_ativa_no_contexto(texto: str) -> str | None:
+    """Lê o campo `**MS ativa:**`. Travessão, vazio ou ausência = sem MS ativa."""
+    m = re.search(r"^\*\*MS ativa:\*\*\s*(.*)$", texto, re.MULTILINE)
+    if not m:
+        return None
+    valor = m.group(1).strip()
+    return None if valor in ("", "—", "-", "–") else valor
+
+
+CTX_VAZIO = """# Active Context — TCA Session RAM
+
+> Este arquivo é a RAM da sessão TCA. É preenchido e limpo automaticamente pelo pipeline.
+> Não editar manualmente durante uma sessão ativa.
+
+**Fase atual:** {fase}
+**MS ativa:** —
+**Arquivos a criar/modificar:** —
+**Cenários BDD:** —
+"""
+
+
+# ── comandos ─────────────────────────────────────────────────────────────────
+
+def cmd_version(_args) -> int:
+    print(f"tca {versao_pacote()} · manifesto {hash_manifesto()}")
+    return 0
+
+
+def cmd_verify_self(_args) -> int:
+    """Integridade do próprio pacote. A TCA é fonte canônica: precisa ser verificável."""
+    if not MANIFEST.exists():
+        print(f"FALHA  MANIFEST.sha256 ausente em {PKG_DIR}", file=sys.stderr)
+        return 1
+    falhas = []
+    verificados = 0
+    for linha in MANIFEST.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith("#"):
+            continue
+        esperado, _, nome = linha.partition("  ")
+        alvo = PKG_DIR / nome
+        if not alvo.is_file():
+            falhas.append(f"ausente: {nome}")
+            continue
+        obtido = sha256(alvo)
+        verificados += 1
+        if obtido != esperado:
+            falhas.append(f"hash divergente: {nome}")
+    for f in falhas:
+        print(f"FALHA  {f}", file=sys.stderr)
+    print(f"{'FALHA' if falhas else 'OK':<6} integridade do pacote — {verificados} arquivos verificados")
+    return 1 if falhas else 0
+
+
+def cmd_close_ms(args) -> int:
+    raiz = achar_raiz(Path.cwd())
+    ms = args.ms_id.strip().upper()
+    if not MS_RE.match(ms):
+        raise TcaError(f"MS-ID inválido: {ms!r}. Formato: MS-NNN (ex.: MS-021).")
+
+    idx_path = raiz / P_INDEX
+    ctx_path = raiz / P_CTX
+    arq_path = raiz / P_ARCHIVE / f"{ms.lower().replace('-', '')}.json"
+
+    indice = ler_json(idx_path)
+    estado = indice.setdefault("estado_da_trilha", {})
+
+    # Idempotência: fechar o que já está fechado é no-op, não erro.
+    if arq_path.exists() and estado.get("ultima_micro_spec_concluida") == ms:
+        print(f"OK     {ms} já fechada — nada a fazer.")
+        registrar_execucao(raiz, "close-ms", "no-op", {"ms": ms})
+        return 0
+
+    if not ctx_path.exists():
+        raise TcaError(f"{P_CTX} não existe. Não há ciclo aberto para fechar.")
+    contexto = ctx_path.read_text(encoding="utf-8")
+    ativa = ms_ativa_no_contexto(contexto)
+
+    # Título: lido do contexto ou informado. Nunca inventado.
+    titulo = args.titulo
+    if not titulo and ativa:
+        titulo = re.sub(r"^MS-\d+\s*[—:-]\s*", "", ativa).strip() or ativa
+    if not titulo:
+        raise TcaError(
+            "não foi possível determinar o título da MS.\n"
+            "O activeContext não declara `**MS ativa:**` e --titulo não foi informado.\n"
+            "Lacuna declarada, não preenchida por inferência."
+        )
+
+    if args.dry_run:
+        print(f"[dry-run] fecharia {ms} — {titulo}")
+        print(f"[dry-run]   criaria  {arq_path.relative_to(raiz)}")
+        print(f"[dry-run]   limparia {P_CTX}")
+        return 0
+
+    # 1. registro de archive — núcleo obrigatório + contexto verbatim
+    registro = {
+        "ms": ms,
+        "titulo": titulo,
+        "data_conclusao": hoje(),
+        "fase": estado.get("fase_atual"),
+        "tca": {"versao": versao_pacote(), "manifesto": hash_manifesto()},
+        "contexto_ativo": contexto,
+        "extensao": {},
+    }
+    if args.testes is not None:
+        registro["testes"] = args.testes
+    escrever_json(arq_path, registro)
+
+    # 2. índice — só os campos que o contrato possui; o resto é preservado
+    estado["ultima_micro_spec_concluida"] = ms
+    estado["micro_spec_ativa"] = None
+    if args.testes is not None:
+        estado["total_testes"] = args.testes
+    archive = indice.setdefault("_archive", {})
+    chaves = sorted({p.stem for p in (raiz / P_ARCHIVE).glob("*.json")})
+    archive["keys"] = chaves
+    escrever_json(idx_path, indice)
+
+    # 3. log de performance
+    logs_path = raiz / P_LOGS
+    logs = ler_json(logs_path) if logs_path.exists() else {"projeto": indice.get("projeto"), "registros": []}
+    registros = logs.setdefault("registros", [])
+    if not any(r.get("ms") == ms for r in registros):
+        registros.append({
+            "ms": ms,
+            "titulo": titulo,
+            "data_conclusao": hoje(),
+            "testes": args.testes,
+        })
+    escrever_json(logs_path, logs)
+
+    # 4. limpeza da RAM da sessão
+    ctx_path.write_text(CTX_VAZIO.format(fase=estado.get("fase_atual") or "—"), encoding="utf-8")
+
+    registrar_execucao(raiz, "close-ms", "ok", {
+        "ms": ms, "titulo": titulo,
+        "archive": str(arq_path.relative_to(raiz)),
+        "archives_total": len(chaves),
+    })
+
+    print(f"OK     {ms} fechada — {titulo}")
+    print(f"       archive  {arq_path.relative_to(raiz)}")
+    print(f"       índice   ultima_micro_spec_concluida={ms} · _archive.keys={len(chaves)}")
+    print(f"       contexto {P_CTX} limpo")
+    if args.testes is None:
+        print("AVISO  total_testes não informado (--testes N). Campo mantido como estava.")
+    return 0
+
+
+def cmd_verify(args) -> int:
+    raiz = achar_raiz(Path.cwd())
+    falhas: list[str] = []
+    avisos: list[str] = []
+
+    indice = ler_json(raiz / P_INDEX)
+    estado = indice.get("estado_da_trilha", {})
+    arch_dir = raiz / P_ARCHIVE
+    arquivos = sorted(arch_dir.glob("*.json")) if arch_dir.is_dir() else []
+
+    # 1. JSON válido nos artefatos de controle
+    logs_path = raiz / P_LOGS
+    if logs_path.exists():
+        ler_json(logs_path)
+
+    # 2. _archive.keys reflete o diretório
+    keys_decl = set(indice.get("_archive", {}).get("keys", []))
+    keys_reais = {p.stem for p in arquivos}
+    if keys_decl != keys_reais:
+        falhas.append(
+            f"_archive.keys diverge do diretório — "
+            f"só no índice: {sorted(keys_decl - keys_reais) or '—'}; "
+            f"só no disco: {sorted(keys_reais - keys_decl) or '—'}"
+        )
+
+    # 3. MS ativa no contexto ⟺ micro_spec_ativa no índice
+    ctx_path = raiz / P_CTX
+    ativa_ctx = ms_ativa_no_contexto(ctx_path.read_text(encoding="utf-8")) if ctx_path.exists() else None
+    ativa_idx = estado.get("micro_spec_ativa")
+    if bool(ativa_ctx) != bool(ativa_idx):
+        falhas.append(
+            f"MS ativa incoerente — activeContext={ativa_ctx!r}, índice={ativa_idx!r}. "
+            "Ciclo aberto sem registro, ou fechado sem limpeza."
+        )
+
+    # 4. última MS concluída tem archive
+    ultima = estado.get("ultima_micro_spec_concluida")
+    if ultima:
+        esperado = ultima.lower().replace("-", "")
+        if esperado not in keys_reais:
+            falhas.append(f"ultima_micro_spec_concluida={ultima} sem archive correspondente ({esperado}.json)")
+
+    # 5. núcleo do archive — aviso por padrão, falha em --strict
+    for p in arquivos:
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            falhas.append(f"{p.name}: JSON inválido ({e})")
+            continue
+        faltando = [k for k in ARCHIVE_CORE if k not in d]
+        if faltando:
+            (falhas if args.strict else avisos).append(
+                f"{p.name}: núcleo incompleto — faltam {', '.join(faltando)}"
+            )
+
+    # 6. campos não deriváveis — lacuna declarada, não falha
+    if "status_modulo_percentual" in estado:
+        avisos.append(
+            "status_modulo_percentual não é derivável: o schema não define campo de backlog. "
+            "Lacuna declarada — ver tca/README.md."
+        )
+
+    for a in avisos:
+        print(f"AVISO  {a}")
+    for f in falhas:
+        print(f"FALHA  {f}", file=sys.stderr)
+
+    resultado = "falha" if falhas else "ok"
+    registrar_execucao(raiz, "verify", resultado, {
+        "archives": len(arquivos), "falhas": len(falhas), "avisos": len(avisos),
+        "strict": bool(args.strict),
+    })
+    print(f"{'FALHA' if falhas else 'OK':<6} coerência de estado — "
+          f"{len(arquivos)} archives · {len(falhas)} falhas · {len(avisos)} avisos")
+    return 1 if falhas else 0
+
+
+# ── entrada ──────────────────────────────────────────────────────────────────
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(prog="tca", description="Thronus Context Architecture — CLI")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("version", help="versão e hash do pacote").set_defaults(fn=cmd_version)
+    sub.add_parser("verify-self", help="integridade do próprio pacote").set_defaults(fn=cmd_verify_self)
+
+    c = sub.add_parser("close-ms", help="fecha o ciclo de uma Micro Spec")
+    c.add_argument("ms_id", help="identificador, formato MS-NNN")
+    c.add_argument("--titulo", help="título da MS; se omitido, lido do activeContext")
+    c.add_argument("--testes", type=int, help="total de testes da suíte após a MS")
+    c.add_argument("--dry-run", action="store_true", help="mostra o que faria, sem escrever")
+    c.set_defaults(fn=cmd_close_ms)
+
+    v = sub.add_parser("verify", help="coerência dos artefatos de controle")
+    v.add_argument("--strict", action="store_true", help="núcleo de archive incompleto reprova")
+    v.set_defaults(fn=cmd_verify)
+
+    args = p.parse_args(argv)
+    try:
+        return args.fn(args)
+    except TcaError as e:
+        print(f"ERRO   {e}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

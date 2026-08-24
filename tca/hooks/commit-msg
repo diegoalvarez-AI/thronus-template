@@ -1,0 +1,50 @@
+#!/usr/bin/env sh
+# commit-msg — portão mecânico de fechamento de ciclo.
+#
+# Regra: commit que declara uma Micro Spec precisa carregar a atualização dos
+# artefatos de controle. Gate que depende de disciplina não é gate.
+#
+# Instalar:  git config core.hooksPath tca/hooks
+# Pular (emergência, deixa rastro):  TCA_SKIP=1 git commit ...
+
+set -eu
+MSG_FILE="$1"
+MSG="$(cat "$MSG_FILE")"
+
+if [ "${TCA_SKIP:-0}" = "1" ]; then
+  echo "AVISO  portão do commit-msg pulado por TCA_SKIP=1"
+  exit 0
+fi
+
+# Só age em commit que declara MS. Os demais passam.
+if ! printf '%s' "$MSG" | grep -qE '\[MS-[0-9]{3,}\]'; then
+  exit 0
+fi
+
+MS="$(printf '%s' "$MSG" | grep -oE 'MS-[0-9]{3,}' | head -1)"
+STAGED="$(git diff --cached --name-only)"
+
+falta=""
+for alvo in \
+  "docs/ThronusSpec/03_Desenvolvimento/payload_index.json" \
+  "docs/ThronusSpec/03_Desenvolvimento/payload_archive" \
+  "context/activeContext.md"
+do
+  printf '%s\n' "$STAGED" | grep -q "^${alvo}" || falta="${falta}  ${alvo}\n"
+done
+
+if [ -n "$falta" ]; then
+  printf 'FALHA  commit declara %s mas não atualiza os artefatos de controle:\n' "$MS" >&2
+  printf "$falta" >&2
+  printf 'Rode:  tca close-ms %s --testes N && git add -A\n' "$MS" >&2
+  exit 1
+fi
+
+# Coerência de estado antes de deixar passar.
+if command -v tca >/dev/null 2>&1; then
+  tca verify || exit 1
+elif [ -x "tca/bin/tca" ]; then
+  ./tca/bin/tca verify || exit 1
+else
+  echo "AVISO  CLI tca não encontrado — coerência de estado não verificada" >&2
+fi
