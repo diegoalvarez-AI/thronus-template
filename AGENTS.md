@@ -120,6 +120,21 @@ disciplina.
 Antes de abrir trabalho novo, `tca verify` confere a coerência dos artefatos de controle e
 `tca doctor` reporta divergência entre a metodologia deste projeto e o canon declarado.
 
+### Marcação de fase
+
+Cada transição do pipeline é marcada:
+
+```bash
+tca fase SPEC · tca fase PLAN · tca fase RED · tca fase GREEN · tca fase COMMIT
+```
+
+Uma chamada por transição. É o que torna o **custo de cada fase derivável** — o intervalo
+entre commits mistura escrita de spec, implementação e espera, e por isso não responde
+quanto custa especificar separado de quanto custa construir.
+
+Sem marcação, o custo por fase é **lacuna declarada**, não zero. E o comando é o único
+escritor de `estado_da_trilha.fase_atual`: o campo deixa de ser editado à mão.
+
 ### Snapshot-diff bidirecional
 
 O `activeContext.md` declara os arquivos que a Micro Spec vai criar ou modificar:

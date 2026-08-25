@@ -303,6 +303,19 @@ produtividade" é a mesma declaração não verificável que o método critica.
 proveniência aplicada à própria medição: um número derivado de 8 de 41 archives não vale o
 mesmo que um derivado de 104 commits, e a saída diz qual é qual.
 
+#### Custo por fase
+
+`tca fase <NOME>` marca cada transição do pipeline. Uma chamada por transição, e é o que
+torna o custo de cada fase derivável: o intervalo entre commits mistura escrita de spec,
+implementação e espera, e não responde **quanto custa especificar**.
+
+`metrics` deriva `fase_<nome>_horas_mediana` para cada fase marcada, e
+`custo_spec_horas_mediana` — soma de SPEC e PLAN — com a construção (RED, GREEN, EDGE) na
+nota, para comparação direta.
+
+Sem marcação, é **lacuna declarada, não zero**. E o comando é o único escritor de
+`estado_da_trilha.fase_atual`.
+
 #### Densidade de especificação e piso da decomposição
 
 Dois indicadores que decidem **quão pequena a Micro Spec deve ser**.

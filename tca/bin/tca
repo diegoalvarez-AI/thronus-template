@@ -12,6 +12,7 @@ Comandos:
   tca version                    versão e hash do pacote
   tca verify-self                integridade do próprio pacote (MANIFEST.sha256)
   tca manifest [--write]         gera/verifica o MANIFEST.sha256
+  tca fase <NOME> [--ms ID]      marca entrada de fase e atualiza a trilha
   tca close-ms <MS-ID> [...]     fecha o ciclo de uma Micro Spec
   tca verify [--strict]          coerência dos artefatos de controle
   tca diff [--cached]            snapshot-diff bidirecional contra a spec
@@ -112,6 +113,15 @@ P_CTX = "context/activeContext.md"
 ARCHIVE_CORE = ("ms", "titulo", "data_conclusao", "fase", "tca", "contexto_ativo")
 
 MS_RE = re.compile(r"^MS-\d{3,}$")
+
+# Fases do pipeline. Marcar a entrada é o que torna o custo de cada uma
+# derivável — sem isso, só existe o lead time entre commits, que mistura
+# escrita de spec, implementação e espera.
+FASES = ("DISCOVERY", "FUNCTIONAL", "ARCHITECTURE", "TRIAGE", "SPEC", "PLAN",
+         "RED", "GREEN", "EDGE", "COMMIT", "DEPLOY", "MONITOR")
+
+# O que é custo de especificação, e não de construção.
+FASES_DE_SPEC = ("SPEC", "PLAN")
 
 # Conteúdo metodológico: o que, alterado, muda o resultado que o método produz.
 # Caminhos relativos à raiz do projeto — a mesma em template e derivados.
@@ -425,6 +435,36 @@ def cmd_verify_self(_args) -> int:
         print(f"FALHA  {f}", file=sys.stderr)
     print(f"{'FALHA' if falhas else 'OK':<6} integridade do pacote — {verificados} arquivos verificados")
     return 1 if falhas else 0
+
+
+def cmd_fase(args) -> int:
+    """Marca a entrada numa fase do pipeline.
+
+    Uma chamada por transição. É o que torna o custo de cada fase derivável —
+    o lead time entre commits mistura escrita de spec, implementação e espera,
+    e por isso não responde quanto custa especificar.
+    """
+    raiz = achar_raiz(Path.cwd())
+    nome = args.nome.strip().upper()
+    if nome not in FASES:
+        raise TcaError(f"fase {nome!r} desconhecida. Use: {' · '.join(FASES)}")
+
+    idx_path = raiz / P_INDEX
+    indice = ler_json(idx_path)
+    estado = indice.setdefault("estado_da_trilha", {})
+    ms = (args.ms or estado.get("micro_spec_ativa") or "").strip().upper() or None
+    if ms and not MS_RE.match(ms):
+        raise TcaError(f"MS-ID inválido: {ms!r}")
+
+    anterior = estado.get("fase_atual")
+    estado["fase_atual"] = nome
+    if ms:
+        estado["micro_spec_ativa"] = ms
+    escrever_json(idx_path, indice)
+
+    registrar_execucao(raiz, "fase", "ok", {"fase": nome, "de": anterior, "ms": ms})
+    print(f"OK     fase {anterior or '—'} → {nome}" + (f" · {ms}" if ms else ""))
+    return 0
 
 
 def cmd_close_ms(args) -> int:
@@ -1591,6 +1631,59 @@ def _densidade_especificacao(raiz: Path, por_ms: dict) -> dict:
     return saida
 
 
+def _custo_por_fase(raiz: Path) -> dict:
+    """Duração de cada fase, das marcações registradas na trilha de execução.
+
+    Responde à pergunta que o lead time não responde: quanto custa especificar,
+    separado de quanto custa construir.
+    """
+    from datetime import datetime as _dt
+    log = raiz / P_EXEC
+    if not log.exists():
+        return {"_lacuna": "sem trilha de execução — custo por fase não derivável"}
+
+    marcas = []
+    for linha in log.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        try:
+            r = json.loads(linha)
+        except json.JSONDecodeError:
+            continue
+        if r.get("comando") == "fase" and r.get("detalhes", {}).get("fase"):
+            marcas.append((_dt.fromisoformat(r["ts"]), r["detalhes"]["fase"],
+                           r["detalhes"].get("ms")))
+    if len(marcas) < 2:
+        return {"_lacuna": f"apenas {len(marcas)} marcação de fase registrada — "
+                           "use `tca fase <NOME>` a cada transição"}
+
+    marcas.sort(key=lambda m: m[0])
+    duracoes: dict[str, list] = {}
+    for i in range(len(marcas) - 1):
+        ini, fase, _ms = marcas[i]
+        fim = marcas[i + 1][0]
+        duracoes.setdefault(fase, []).append((fim - ini).total_seconds() / 3600)
+
+    saida = {}
+    for fase, xs in sorted(duracoes.items()):
+        saida[f"fase_{fase.lower()}_horas_mediana"] = {
+            "valor": round(_mediana(xs), 2), "origem": "derivado:trilha",
+            "cobertura": f"n={len(xs)}"}
+
+    spec = [h for f in FASES_DE_SPEC for h in duracoes.get(f, [])]
+    if spec:
+        constroi = [h for f, xs in duracoes.items() if f in ("RED", "GREEN", "EDGE")
+                    for h in xs]
+        saida["custo_spec_horas_mediana"] = {
+            "valor": round(_mediana(spec), 2), "origem": "derivado:trilha",
+            "cobertura": f"n={len(spec)}",
+            "nota": f"{' + '.join(FASES_DE_SPEC)}"
+                    + (f"; construção (RED+GREEN+EDGE): {_mediana(constroi):.2f}h"
+                       if constroi else "")}
+    return saida
+
+
 def _custo_fixo(raiz: Path, por_ms: dict, timeout: int) -> dict:
     """Piso da decomposição: o que se paga por MS independente do tamanho dela.
 
@@ -1778,6 +1871,7 @@ def cmd_metrics(args) -> int:
     if not sem_historico:
         _aplicar(_densidade_especificacao(raiz, por_ms))
         _aplicar(_custo_fixo(raiz, por_ms, args.timeout))
+    _aplicar(_custo_por_fase(raiz))
     if args.medir_loop:
         total_t = registro["indicadores"].get("suite_testes", {}).get("valor")
         _aplicar(_medir_loop(raiz, args.timeout, args.amostra, total_t))
@@ -2040,6 +2134,11 @@ def main(argv=None) -> int:
     mf = sub.add_parser("manifest", help="gera/verifica o MANIFEST.sha256")
     mf.add_argument("--write", action="store_true", help="regenera o manifesto")
     mf.set_defaults(fn=cmd_manifest)
+
+    fs = sub.add_parser("fase", help="marca entrada de fase e atualiza a trilha")
+    fs.add_argument("nome", help=" · ".join(FASES))
+    fs.add_argument("--ms", help="MS-ID; se omitido, usa a MS ativa do índice")
+    fs.set_defaults(fn=cmd_fase)
 
     c = sub.add_parser("close-ms", help="fecha o ciclo de uma Micro Spec")
     c.add_argument("ms_id", help="identificador, formato MS-NNN")

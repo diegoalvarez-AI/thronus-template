@@ -507,6 +507,52 @@ class TestSeveridadeEGate(Base):
         self.assertEqual(reg["detalhes"]["estado"], "ATENDIDO")
 
 
+class TestFase(Base):
+    """Marcação de fase: o que torna o custo de especificar derivável."""
+
+    def test_marca_transicao_e_atualiza_a_trilha(self):
+        self.assertEqual(tca.main(["fase", "SPEC", "--ms", "MS-021"]), 0)
+        est = self.indice()["estado_da_trilha"]
+        self.assertEqual(est["fase_atual"], "SPEC")
+        self.assertEqual(est["micro_spec_ativa"], "MS-021")
+
+    def test_fase_desconhecida_e_erro_nao_inferencia(self):
+        self.assertEqual(tca.main(["fase", "ESPECIFICANDO"]), 2)
+
+    def test_caixa_e_normalizada(self):
+        self.assertEqual(tca.main(["fase", "green"]), 0)
+        self.assertEqual(self.indice()["estado_da_trilha"]["fase_atual"], "GREEN")
+
+    def test_herda_a_ms_ativa_do_indice(self):
+        tca.main(["fase", "SPEC", "--ms", "MS-021"])
+        tca.main(["fase", "PLAN"])
+        reg = json.loads((self.raiz / P_EXEC).read_text(encoding="utf-8")
+                         .strip().splitlines()[-1])
+        self.assertEqual(reg["detalhes"]["ms"], "MS-021")
+        self.assertEqual(reg["detalhes"]["de"], "SPEC")
+
+    def test_custo_por_fase_exige_marcacoes(self):
+        """Sem marcação, é lacuna declarada — não zero."""
+        tca.main(["metrics", "--write"])
+        reg = json.loads((self.raiz / tca.P_METRICAS).read_text(encoding="utf-8")
+                         .strip().splitlines()[-1])
+        self.assertNotIn("custo_spec_horas_mediana", reg["indicadores"])
+        self.assertTrue(any("fase" in n for n in reg["nao_instrumentado"]))
+
+    def test_separa_custo_de_especificar_de_construir(self):
+        for f in ("SPEC", "PLAN", "RED", "GREEN", "COMMIT"):
+            tca.main(["fase", f, "--ms", "MS-021"])
+        tca.main(["metrics", "--write"])
+        ind = self._indicadores()
+        self.assertIn("custo_spec_horas_mediana", ind)
+        self.assertEqual(ind["custo_spec_horas_mediana"]["origem"], "derivado:trilha")
+        self.assertIn("construção", ind["custo_spec_horas_mediana"]["nota"])
+
+    def _indicadores(self):
+        return json.loads((self.raiz / tca.P_METRICAS).read_text(encoding="utf-8")
+                          .strip().splitlines()[-1])["indicadores"]
+
+
 class TestVerify(Base):
     def test_detecta_ciclo_aberto_sem_registro(self):
         idx = self.indice()
