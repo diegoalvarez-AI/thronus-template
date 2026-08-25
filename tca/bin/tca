@@ -874,8 +874,12 @@ def cmd_metrics(args) -> int:
         registro["indicadores"]["suite_segundos"] = ind(args.suite_segundos, "reportado")
 
     if args.suite_segundos is None and not args.medir_suite:
-        registro["nao_instrumentado"].insert(
-            1, f"suite_segundos — declare comandos.testes em {P_PROJETO_CFG} e use --medir-suite")
+        # Distinguir "falta declarar" de "falta ambiente": mandar declarar o que
+        # já está declarado é diagnóstico errado.
+        motivo = ("use --medir-suite, com o ambiente do projeto de pé"
+                  if _ler_cfg(raiz).get("testes")
+                  else f"declare comandos.testes em {P_PROJETO_CFG}")
+        registro["nao_instrumentado"].insert(1, f"suite_segundos — {motivo}")
 
     for ativo, fn in ((args.medir_suite, _medir_suite),
                       (args.medir_suite or args.contar_testes, _contar_testes)):

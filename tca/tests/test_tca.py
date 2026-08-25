@@ -539,6 +539,21 @@ class TestMetrics(unittest.TestCase):
         self.assertFalse((self.dir / "RODOU").exists(), "contar não pode executar a suíte")
         self.assertNotIn("suite_segundos", self._registro())
 
+    def test_lacuna_distingue_falta_de_contrato_de_falta_de_ambiente(self):
+        tca.main(["metrics", "--write"])
+        reg = json.loads((self.dir / tca.P_METRICAS).read_text(encoding="utf-8")
+                         .strip().splitlines()[-1])
+        self.assertTrue(any("declare comandos.testes" in n for n in reg["nao_instrumentado"]))
+
+        (self.dir / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "testes": "python3 -c \"pass\""}}), encoding="utf-8")
+        tca.main(["metrics", "--write"])
+        reg = json.loads((self.dir / tca.P_METRICAS).read_text(encoding="utf-8")
+                         .strip().splitlines()[-1])
+        self.assertTrue(any("--medir-suite" in n and "declare" not in n
+                            for n in reg["nao_instrumentado"]),
+                        "com contrato declarado, a lacuna é de ambiente, não de declaração")
+
     def test_detectar_nao_executa(self):
         (self.dir / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
         (self.dir / "marcador").write_text("intacto", encoding="utf-8")
