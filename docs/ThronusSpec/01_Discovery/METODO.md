@@ -62,20 +62,65 @@ esse lado da fronteira; não as remove.
 
 ---
 
-## 2. O ciclo
+## 2. O ciclo — duas cadências, não uma
 
-O Discovery não é etapa única de porta de entrada. É ciclo que se repete a cada rodada de
-evolução do cliente, e o FMO reavalia a prontidão ao final de cada volta.
+O Discovery não é etapa única de porta de entrada, mas **a prontidão organizacional não se
+remede a cada volta**. Tier 1 e Tier 2 medem construto que se move em meses: o próprio plano de
+validação do FMO prevê aferições separadas por 6 a 18 meses. Reaplicar questionário de
+maturidade em intervalo curto não mede evolução — mede ruído, e gasta a paciência do cliente
+com pergunta que ele acabou de responder.
+
+São duas cadências distintas, com instrumentos distintos:
 
 ```
-        ┌──────────────────────────────────────────────────────┐
-        │                                                      │
-   FMO ─┴─→ ONBOARDING → CAMPO → REDESENHO → VALOR EM VOO ─────┤
-                                      │            │           │
-                                      └→ PROGRAMA ─┴→ EXECUÇÃO ┘
-                                                        │
-                                                    MEDIÇÃO
+CADÊNCIA LONGA — prontidão da organização            6 a 18 meses
+  FMO Tier 1 / Tier 2 ──────────────────────────────────────────┐
+        │                                                       │
+        ↓                                                       │
+   ONBOARDING → CAMPO → REDESENHO → VALOR EM VOO → PROGRAMA      │
+                                                       │        │
+                                                       ↓        │
+CADÊNCIA CURTA — efeito da intervenção            por entrega   │
+   EXECUÇÃO → FMO Tier 3 ──→ próximo item da trilha             │
+                    │                                           │
+                    └── oportunidade nova, ou gargalo deslocado ─┘
 ```
+
+**Cadência longa.** Tier 1 ou Tier 2 reabrem quando há motivo: passou o intervalo do desenho
+longitudinal, ou houve fato que muda a prontidão — troca de gestão, novo sistema central,
+mudança de porte, fusão. Fora disso, o perfil dimensional vigente continua valendo, e é ele que
+alimenta o Discovery seguinte.
+
+**Cadência curta.** A cada intervenção entregue, o **FMO Tier 3** verifica o efeito e libera —
+ou não — o próximo item da trilha. Não é diagnóstico de prontidão em versão reduzida: é
+verificação de efeito, e por isso pode rodar em cadência de entrega sem perder sentido.
+
+### 2.1 Contrato do Tier 3
+
+O que o Discovery **entrega** ao Tier 3, por intervenção:
+
+| Insumo | Origem |
+|---|---|
+| Eixo de valor declarado, com baseline medido antes | fase O (§7) |
+| Critério de sucesso e prazo de verificação | catálogo da natureza (`INTERVENCOES.md`) |
+| Comportamento-alvo, quando houve capacitação | item ADKAR da trilha |
+| Pré-condições que estavam em aberto, com dono e prazo | seção 6 do Programa |
+| Item seguinte da trilha e de que este era dependência | trilha sequenciada |
+
+O que o Discovery **espera de volta**:
+
+| Saída | Consequência |
+|---|---|
+| Medida do eixo de valor contra o baseline | prova de resultado, ou refutação do to-be |
+| Adoção observada — a coisa está em uso, por quem, com que frequência | entrega em uso não é entrega adotada |
+| Estado das pré-condições que estavam em aberto | pendência vencida é decisão, não silêncio |
+| Liberação, ou não, do item seguinte | dependência satisfeita ou trilha replanejada |
+| Oportunidade nova ou gargalo deslocado | dissolver uma atividade revela a próxima restrição |
+
+**A definição do instrumento Tier 3 — itens, rubrica e escala — pertence ao FMO, não a este
+documento.** Aqui se declara a interface: o que entra, o que sai, e em que ponto do ciclo ele
+opera. Enquanto o Tier 3 não estiver especificado, a verificação de efeito roda pelos
+critérios de sucesso do `INTERVENCOES.md` e fica registrada como lacuna declarada.
 
 Cada volta é mais barata que a anterior: o vocabulário do cliente já está registrado, o
 processo já está mapeado, e a equipe já passou por uma rodada de aculturamento.
@@ -230,7 +275,8 @@ narrativa. A verificação tem data e dono, e entra no programa como item. E o e
 exige a cadeia causal escrita, porque atribuição de receita a uma intervenção é a mais fácil de
 inflar e a que mais destrói confiança quando não se sustenta.
 
-O mesmo baseline alimenta o plano de validação do FMO e o case da próxima venda.
+O mesmo baseline alimenta o **FMO Tier 3** na verificação de efeito (§2.1) e o case da
+próxima venda.
 
 ---
 

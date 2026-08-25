@@ -19,8 +19,13 @@ Cliente · setor · porte · responsável Thronus · datas do campo · versão d
 autorização de gravação · termo de dados · agenda fechada. Item pendente é pré-condição com
 dono e prazo (seção 6), nunca motivo para começar assim mesmo.
 
-**Herança do diagnóstico:** versão do FMO · tier aplicado · perfil dimensional com banda e
-**nível conservador adotado** por dimensão · confiança · estado dos três gates.
+**Herança do diagnóstico:** versão do FMO · tier aplicado (1 ou 2) · **data do diagnóstico** ·
+perfil dimensional com banda e **nível conservador adotado** por dimensão · confiança · estado
+dos três gates.
+
+O perfil vigente continua valendo até o intervalo do desenho longitudinal ou até fato que mude
+a prontidão — troca de gestão, novo sistema central, mudança de porte. **Não se reaplica Tier 1
+ou Tier 2 a cada volta** (`METODO.md` §2). A verificação por entrega é o **Tier 3**.
 
 ## 1. Escopo do levantamento
 **SIPOC** do processo levantado: fornecedor · entrada · processo · saída · cliente.
@@ -86,6 +91,12 @@ De uma a três intervenções **em uso**, não protótipo (`METODO.md` §5). Por
 O que foi transcrito, reconstruído, cruzado ou redigido por agente, e o que foi validado em
 campo. Toda afirmação deste documento carrega procedência — `[observado]`, `[relatado]`,
 `[inferido pela IA]` — e o que está como inferido não sustentou portão.
+
+## 7-C. Verificação de efeito — insumos para o Tier 3
+| Intervenção | Eixo | Baseline | Critério de sucesso | Prazo de verificação | Item que ela libera |
+|---|---|---|---|---|---|
+
+Contrato em `METODO.md` §2.1. A verificação roda por entrega, não por rodada de diagnóstico.
 
 ## 8. Dimensionamento
 Por item: unidade da sua natureza · banda de esforço · **compromisso no extremo conservador** ·
