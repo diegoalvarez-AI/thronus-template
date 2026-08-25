@@ -1,0 +1,13 @@
+{
+  "ms": "MS-001",
+  "titulo": "Linha do tempo das fases da MS ativa",
+  "data_conclusao": "2026-08-25",
+  "fase": "COMMIT",
+  "tca": {
+    "versao": "2.11.0",
+    "manifesto": "adff4fd3c1b9"
+  },
+  "contexto_ativo": "# Active Context — TCA Session RAM\n\n**Fase atual:** GREEN\n**MS ativa:** MS-001 — Linha do tempo das fases da MS ativa\n**Arquivos a criar/modificar:** tca/bin/tca, tca/tests/test_tca.py, tca/hooks/commit-msg, tca/README.md, tca/VERSION, tca/MANIFEST.sha256\n**Cenários BDD:** CT-01, CT-02, CT-03\n\n## Contratos\n\n`tca fase --listar` imprime a sequência de fases da MS ativa com a duração de cada\ntransição, lendo a trilha de execução. Não escreve nada.\n\n## Cenários\n\n- **CT-01** — com marcações, lista as fases em ordem com a duração de cada uma.\n- **CT-02** — sem marcação, avisa em vez de imprimir lista vazia.\n- **CT-03** — lista apenas as marcações da MS ativa.\n",
+  "extensao": {},
+  "testes": 127
+}

@@ -309,6 +309,9 @@ mesmo que um derivado de 104 commits, e a saída diz qual é qual.
 torna o custo de cada fase derivável: o intervalo entre commits mistura escrita de spec,
 implementação e espera, e não responde **quanto custa especificar**.
 
+`tca fase --listar` mostra a linha do tempo da MS ativa, com a duração de cada transição.
+Sem marcação, avisa em vez de imprimir lista vazia.
+
 `metrics` deriva `fase_<nome>_horas_mediana` para cada fase marcada, e
 `custo_spec_horas_mediana` — soma de SPEC e PLAN — com a construção (RED, GREEN, EDGE) na
 nota, para comparação direta.

@@ -30,16 +30,18 @@
   "estado_da_trilha": {
     "modulo": "{{PROJECT_NAME}}",
     "perfil": "{{PERFIL}}",
-    "fase_atual": "DISCOVERY",
-    "ultima_micro_spec_concluida": null,
+    "fase_atual": "COMMIT",
+    "ultima_micro_spec_concluida": "MS-001",
     "status_modulo_percentual": "0%",
     "proximo_gate": "GATE_DISCOVERY",
     "micro_spec_ativa": null,
-    "total_testes": 0
+    "total_testes": 127
   },
   "_archive": {
     "path": "docs/ThronusSpec/03_Desenvolvimento/payload_archive/",
-    "keys": [],
+    "keys": [
+      "ms001"
+    ],
     "nota": "Carregar apenas contratos relevantes para a MS ativa, via leitura dirigida (CAP-SEARCH)."
   }
 }

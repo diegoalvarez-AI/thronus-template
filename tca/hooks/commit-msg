@@ -53,4 +53,12 @@ else
 fi
 
 $TCA verify || exit 1
-$TCA diff --cached || exit 1
+
+# Depois do close-ms o activeContext está limpo: a spec de registro é a
+# arquivada. O MS-ID da mensagem diz qual.
+ARQ="docs/ThronusSpec/03_Desenvolvimento/payload_archive/$(printf '%s' "$MS" | tr '[:upper:]' '[:lower:]' | tr -d '-').json"
+if [ -f "$ARQ" ]; then
+  $TCA diff --cached --ms "$MS" || exit 1
+else
+  $TCA diff --cached || exit 1
+fi

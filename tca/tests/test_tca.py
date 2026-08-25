@@ -206,6 +206,26 @@ class TestDiff(Base):
                                          encoding="utf-8")
         self.assertEqual(tca.main(["diff"]), 0)
 
+    def test_artefato_de_controle_declarado_nao_vira_faltante(self):
+        """Ele é removido dos tocados; permanecer nos previstos produziria
+        FALTANTE em todo commit de fechamento."""
+        self._spec("**Arquivos a criar/modificar:** src/a.py, tca.lock.json")
+        self._muda("src/a.py")
+        self.assertEqual(tca.main(["diff"]), 0)
+
+    def test_compara_contra_a_spec_arquivada_apos_o_fechamento(self):
+        """O close-ms limpa o contexto e o commit vem depois: sem ler o archive,
+        o portão de commit compara contra spec vazia e reprova tudo."""
+        self._spec("**Arquivos a criar/modificar:** src/a.py")
+        self._muda("src/a.py")
+        tca.main(["close-ms", "MS-021"])
+        self.assertEqual(tca.main(["diff"]), 1, "contexto limpo: tudo vira inesperado")
+        self.assertEqual(tca.main(["diff", "--ms", "MS-021"]), 0,
+                         "contra a spec arquivada, o diff confere")
+
+    def test_ms_sem_archive_e_erro_explicito(self):
+        self.assertEqual(tca.main(["diff", "--ms", "MS-999"]), 2)
+
     def test_emite_evidencia(self):
         self._spec("**Arquivos a criar/modificar:** src/a.py")
         self._muda("src/a.py")
@@ -530,6 +550,24 @@ class TestFase(Base):
                          .strip().splitlines()[-1])
         self.assertEqual(reg["detalhes"]["ms"], "MS-021")
         self.assertEqual(reg["detalhes"]["de"], "SPEC")
+
+    # ── MS-001: linha do tempo das fases ──
+
+    def test_ct01_lista_fases_em_ordem_com_duracao(self):
+        for f in ("SPEC", "PLAN", "RED"):
+            tca.main(["fase", f, "--ms", "MS-021"])
+        self.assertEqual(tca.main(["fase", "--listar"]), 0)
+
+    def test_ct02_sem_marcacao_avisa(self):
+        self.assertEqual(tca.main(["fase", "--listar"]), 0,
+                         "sem marcação, avisa em vez de lista vazia")
+
+    def test_ct03_lista_so_a_ms_ativa(self):
+        tca.main(["fase", "SPEC", "--ms", "MS-021"])
+        tca.main(["fase", "GREEN", "--ms", "MS-099"])
+        linha = tca.linha_do_tempo(self.raiz, "MS-021")
+        self.assertTrue(all(m["ms"] == "MS-021" for m in linha))
+        self.assertEqual([m["fase"] for m in linha], ["SPEC"])
 
     def test_metrics_funciona_sem_git(self):
         """Custo de fase vem da trilha, não do histórico: exigir git seria

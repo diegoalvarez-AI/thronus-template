@@ -12,7 +12,7 @@ Comandos:
   tca version                    versão e hash do pacote
   tca verify-self                integridade do próprio pacote (MANIFEST.sha256)
   tca manifest [--write]         gera/verifica o MANIFEST.sha256
-  tca fase <NOME> [--ms ID]      marca entrada de fase e atualiza a trilha
+  tca fase <NOME> | --listar     marca entrada de fase · linha do tempo da MS
   tca close-ms <MS-ID> [...]     fecha o ciclo de uma Micro Spec
   tca verify [--strict]          coerência dos artefatos de controle
   tca diff [--cached]            snapshot-diff bidirecional contra a spec
@@ -437,6 +437,36 @@ def cmd_verify_self(_args) -> int:
     return 1 if falhas else 0
 
 
+def linha_do_tempo(raiz: Path, ms: str | None) -> list[dict]:
+    """Marcações de fase de uma MS, em ordem, com a duração de cada transição."""
+    from datetime import datetime as _dt
+    log = raiz / P_EXEC
+    if not log.exists():
+        return []
+    marcas = []
+    for linha in log.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        try:
+            r = json.loads(linha)
+        except json.JSONDecodeError:
+            continue
+        d = r.get("detalhes", {})
+        if r.get("comando") != "fase" or not d.get("fase"):
+            continue
+        if ms and d.get("ms") != ms:
+            continue
+        marcas.append({"ts": r["ts"], "fase": d["fase"], "ms": d.get("ms")})
+    marcas.sort(key=lambda m: m["ts"])
+    for i, m in enumerate(marcas):
+        if i + 1 < len(marcas):
+            m["duracao_h"] = round(
+                (_dt.fromisoformat(marcas[i + 1]["ts"]) - _dt.fromisoformat(m["ts"]))
+                .total_seconds() / 3600, 3)
+    return marcas
+
+
 def cmd_fase(args) -> int:
     """Marca a entrada numa fase do pipeline.
 
@@ -445,6 +475,27 @@ def cmd_fase(args) -> int:
     e por isso não responde quanto custa especificar.
     """
     raiz = achar_raiz(Path.cwd())
+
+    if args.listar:
+        idx = ler_json(raiz / P_INDEX)
+        ms = args.ms or idx.get("estado_da_trilha", {}).get("micro_spec_ativa")
+        marcas = linha_do_tempo(raiz, ms)
+        if not marcas:
+            print(f"AVISO  nenhuma marcação de fase{f' para {ms}' if ms else ''} — "
+                  "use `tca fase <NOME>` a cada transição")
+            return 0
+        print(f"       linha do tempo · {ms or 'todas as MS'}")
+        total = 0.0
+        for m in marcas:
+            dur = m.get("duracao_h")
+            total += dur or 0
+            marca = f"{dur:>7.3f} h" if dur is not None else "      —  "
+            print(f"       {m['ts'][11:19]}  {m['fase']:<12} {marca}")
+        print(f"OK     {len(marcas)} marcações · {total:.3f} h até a última transição")
+        return 0
+
+    if not args.nome:
+        raise TcaError("informe a fase ou use --listar")
     nome = args.nome.strip().upper()
     if nome not in FASES:
         raise TcaError(f"fase {nome!r} desconhecida. Use: {' · '.join(FASES)}")
@@ -480,8 +531,10 @@ def cmd_close_ms(args) -> int:
     indice = ler_json(idx_path)
     estado = indice.setdefault("estado_da_trilha", {})
 
-    # Idempotência: fechar o que já está fechado é no-op, não erro.
-    if arq_path.exists() and estado.get("ultima_micro_spec_concluida") == ms:
+    # Idempotência: fechar o que já está fechado é no-op, não erro. Salvo em
+    # rollback COMMIT → GREEN, quando o escopo mudou depois do fechamento e o
+    # archive ficou defasado da spec final.
+    if arq_path.exists() and estado.get("ultima_micro_spec_concluida") == ms and not args.refazer:
         print(f"OK     {ms} já fechada — nada a fazer.")
         registrar_execucao(raiz, "close-ms", "no-op", {"ms": ms})
         return 0
@@ -1091,10 +1144,26 @@ def cmd_diff(args) -> int:
     não apareceu passava sem ruído — e é essa a assinatura da entrega parcial.
     """
     raiz = achar_raiz(Path.cwd())
-    ctx_path = raiz / P_CTX
-    if not ctx_path.exists():
-        raise TcaError(f"{P_CTX} não existe — não há spec contra a qual comparar.")
-    texto = ctx_path.read_text(encoding="utf-8")
+
+    # Depois do fechamento, a spec de registro é a que ficou no archive: o
+    # `close-ms` limpa o activeContext, e o commit vem depois dele. Sem isto o
+    # portão de commit compara contra uma spec vazia e reprova tudo.
+    texto = None
+    if args.ms:
+        ms = args.ms.strip().upper()
+        arq = raiz / P_ARCHIVE / f"{ms.lower().replace('-', '')}.json"
+        if not arq.exists():
+            raise TcaError(f"{ms} não tem archive — nada contra o que comparar.")
+        texto = ler_json(arq).get("contexto_ativo")
+        if not isinstance(texto, str):
+            raise TcaError(f"archive de {ms} não preserva o contexto — "
+                           "MS fechada antes do `tca close-ms`.")
+    else:
+        ctx_path = raiz / P_CTX
+        if not ctx_path.exists():
+            raise TcaError(f"{P_CTX} não existe — não há spec contra a qual comparar.")
+        texto = ctx_path.read_text(encoding="utf-8")
+
     declarados = arquivos_declarados(texto)
     if declarados is None:
         _achado("SEV-009")
@@ -1109,6 +1178,10 @@ def cmd_diff(args) -> int:
         raise TcaError("não foi possível ler o diff do git")
     tocados = {l.strip() for l in saida.splitlines()
                if l.strip() and not _e_artefato_de_controle(l.strip())}
+    # Artefato de controle declarado na spec sairia sempre como FALTANTE: ele é
+    # removido dos tocados e permaneceria nos previstos. O portão governa
+    # mudança de produto dos dois lados.
+    declarados = [f for f in declarados if not _e_artefato_de_controle(f)]
     previstos = set(declarados)
 
     inesperados = sorted(tocados - previstos)
@@ -2139,7 +2212,9 @@ def main(argv=None) -> int:
     mf.set_defaults(fn=cmd_manifest)
 
     fs = sub.add_parser("fase", help="marca entrada de fase e atualiza a trilha")
-    fs.add_argument("nome", help=" · ".join(FASES))
+    fs.add_argument("nome", nargs="?", help=" · ".join(FASES))
+    fs.add_argument("--listar", action="store_true",
+                    help="linha do tempo das fases da MS ativa")
     fs.add_argument("--ms", help="MS-ID; se omitido, usa a MS ativa do índice")
     fs.set_defaults(fn=cmd_fase)
 
@@ -2148,6 +2223,9 @@ def main(argv=None) -> int:
     c.add_argument("--titulo", help="título da MS; se omitido, lido do activeContext")
     c.add_argument("--testes", type=int, help="total de testes da suíte após a MS")
     c.add_argument("--dry-run", action="store_true", help="mostra o que faria, sem escrever")
+    c.add_argument("--refazer", action="store_true",
+                   help="reescreve o archive após rollback COMMIT → GREEN, quando o "
+                        "escopo mudou depois do fechamento")
     c.set_defaults(fn=cmd_close_ms)
 
     v = sub.add_parser("verify", help="coerência dos artefatos de controle")
@@ -2157,6 +2235,8 @@ def main(argv=None) -> int:
     df = sub.add_parser("diff", help="snapshot-diff bidirecional contra a spec")
     df.add_argument("--cached", action="store_true",
                     help="compara só o que está em staging (uso no portão de commit)")
+    df.add_argument("--ms", help="compara contra a spec arquivada desta MS, em vez "
+                                 "do activeContext — uso após o close-ms")
     df.set_defaults(fn=cmd_diff)
 
     sv = sub.add_parser("sev", help="registro canônico de severidade")

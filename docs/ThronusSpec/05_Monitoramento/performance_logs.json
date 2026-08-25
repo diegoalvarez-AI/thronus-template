@@ -1,4 +1,11 @@
 {
   "projeto": "{{PROJECT_NAME}}",
-  "registros": []
+  "registros": [
+    {
+      "ms": "MS-001",
+      "titulo": "Linha do tempo das fases da MS ativa",
+      "data_conclusao": "2026-08-25",
+      "testes": 125
+    }
+  ]
 }
