@@ -440,6 +440,12 @@ class TestSeveridadeEGate(Base):
         self.assertEqual(tca.main(["gate", "--portao", "COMMIT", "--de", "diff"]), 1)
         self.assertIn("SEV-007", tca.ACHADOS, "faltante deve virar achado do registro")
 
+    def test_de_usa_os_defaults_do_proprio_parser(self):
+        """Montar o namespace à mão quebrava a cada flag nova numa verificação."""
+        for nome in ("diff", "trace", "selfcheck", "doctor"):
+            ns = tca._parser().parse_args([nome])
+            self.assertTrue(callable(ns.fn), nome)
+
     def test_verificacao_desconhecida_em_de_e_erro(self):
         tca.ACHADOS.clear()
         self.assertEqual(tca.main(["gate", "--de", "inexistente"]), 2)

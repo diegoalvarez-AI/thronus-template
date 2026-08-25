@@ -1540,21 +1540,18 @@ def cmd_gate(args) -> int:
     # --de executa as verificações e colhe o que elas encontraram, em vez de
     # exigir que alguém traduza código de saída em achado à mão.
     if args.de:
-        from argparse import Namespace
-        disponiveis = {
-            "diff": (cmd_diff, Namespace(cached=False)),
-            "trace": (cmd_trace, Namespace(write=False, strict=False, impacto=None)),
-            "selfcheck": (cmd_selfcheck, Namespace(tolerancia=2.0, timeout=600)),
-            "doctor": (cmd_doctor, Namespace(strict=False)),
-        }
+        # Os defaults vêm do próprio parser: montá-los à mão duplicaria a
+        # definição e quebraria a cada flag nova — foi o que aconteceu quando
+        # `diff` ganhou --ms.
+        VERIFICACOES = ("diff", "trace", "selfcheck", "doctor")
         for nome in [n.strip() for n in args.de.split(",") if n.strip()]:
-            if nome not in disponiveis:
+            if nome not in VERIFICACOES:
                 raise TcaError(f"verificação desconhecida: {nome!r}. "
-                               f"Disponíveis: {', '.join(sorted(disponiveis))}")
-            fn, ns = disponiveis[nome]
+                               f"Disponíveis: {', '.join(VERIFICACOES)}")
+            ns = _parser().parse_args([nome])
             print(f"       ── {nome}")
             try:
-                fn(ns)
+                ns.fn(ns)
             except TcaError as e:
                 print(f"       {e}".replace("\n", "\n       "))
         achados += [a for a in ACHADOS if a not in achados]
@@ -2200,7 +2197,7 @@ def cmd_doctor(args) -> int:
 
 # ── entrada ──────────────────────────────────────────────────────────────────
 
-def main(argv=None) -> int:
+def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="tca", description="Thronus Context Architecture — CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -2320,7 +2317,11 @@ def main(argv=None) -> int:
     d.add_argument("--strict", action="store_true", help="divergência não declarada reprova")
     d.set_defaults(fn=cmd_doctor)
 
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv=None) -> int:
+    args = _parser().parse_args(argv)
     try:
         return args.fn(args)
     except TcaError as e:
