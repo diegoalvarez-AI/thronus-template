@@ -89,6 +89,9 @@ jobs:
       - name: A verificação está de pé?
         run: ./tca/bin/tca selfcheck
 
+      - name: Índice de rastreabilidade
+        run: ./tca/bin/tca trace
+
       - name: Testes do pacote tca
         run: python3 tca/tests/test_tca.py
 

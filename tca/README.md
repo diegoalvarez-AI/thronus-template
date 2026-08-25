@@ -100,6 +100,33 @@ portão reprovar sempre até virar ruído que se aprende a ignorar. Eles são go
 
 `--cached` compara só o que está em staging: é a forma usada pelo portão de commit.
 
+### `tca trace [--write] [--strict] [--impacto ARQUIVO]`
+
+**O índice de rastreabilidade.** Constrói `identificador → arquivo → Micro Spec` a partir
+de marcadores em comentário e do histórico git. Marcador é texto, não recurso de runner —
+a TCA não pode depender de `pytest.mark`, tag de vitest ou anotação de JUnit.
+
+```
+# @tca RF-014 UC-003
+// @tca RF-031 RNF-007
+```
+
+`--impacto <arquivo>` responde, **antes** de escrever a primeira linha: quais testes
+alcançam o arquivo, quais requisitos ele toca, quais Micro Specs o alteraram. Usa
+`comandos.testes_relacionados` para o grafo de módulos; sem ele, cai no marcador do
+próprio arquivo e avisa.
+
+O mesmo grafo serve à análise de impacto e à seleção de teste. É a peça que ataca os dois
+maiores custos medidos: a leitura exploratória e as idas e vindas de correção.
+
+**Cobertura de requisito exige universo declarado.** Com `comandos.listar_requisitos` — um
+comando que imprime um identificador por linha — o índice calcula quantos requisitos têm
+teste e lista os que não têm; `--strict` reprova nesse caso. Sem o universo, a cobertura é
+**lacuna declarada, nunca 100%**: o índice sabe o que está coberto, não o que falta.
+
+O pacote `tca/` fica fora da varredura. Ele documenta a convenção, e os exemplos entrariam
+no índice como se fossem cobertura real.
+
 ### `tca selfcheck`
 
 **A verificação está de pé?** Responde ao incidente em que um estágio de integração

@@ -260,6 +260,87 @@ class TestSelfcheck(Base):
                          "sem base desta máquina, avisa em vez de reprovar por comparação inválida")
 
 
+class TestTrace(Base):
+    """Índice de rastreabilidade: requisito ↔ arquivo ↔ Micro Spec."""
+
+    @staticmethod
+    def _git(cwd, *args):
+        import subprocess
+        subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True)
+
+    def setUp(self):
+        super().setUp()
+        self._git(self.raiz, "init", "-q", "-b", "main")
+        (self.raiz / "tests").mkdir(exist_ok=True)
+        (self.raiz / "src").mkdir(exist_ok=True)
+
+    def _arquivo(self, caminho, conteudo):
+        alvo = self.raiz / caminho
+        alvo.parent.mkdir(parents=True, exist_ok=True)
+        alvo.write_text(conteudo, encoding="utf-8")
+        return alvo
+
+    def _commit(self, msg):
+        self._git(self.raiz, "add", "-A")
+        self._git(self.raiz, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", msg)
+
+    def _indice(self):
+        return json.loads((self.raiz / tca.P_TRACE).read_text(encoding="utf-8"))
+
+    def test_indexa_marcador_em_qualquer_linguagem(self):
+        self._arquivo("tests/test_turma.py", "# @tca RF-014 UC-003\ndef test_x(): pass\n")
+        self._arquivo("tests/turma.test.ts", "// @tca RF-031\nit('x', () => {})\n")
+        self._arquivo("src/turma.go", "/* @tca RNF-007 */\n")
+        self.assertEqual(tca.main(["trace", "--write"]), 0)
+        por_id = self._indice()["por_identificador"]
+        self.assertEqual(sorted(por_id), ["RF-014", "RF-031", "RNF-007", "UC-003"])
+        self.assertEqual(por_id["RF-014"]["arquivos"], ["tests/test_turma.py"])
+
+    def test_liga_identificador_a_micro_spec_pelo_commit(self):
+        self._arquivo("tests/test_turma.py", "# @tca RF-014\n")
+        self._commit("feat(turma): cadastro [MS-021]")
+        tca.main(["trace", "--write"])
+        self.assertEqual(self._indice()["por_identificador"]["RF-014"]["micro_specs"], ["MS-021"])
+
+    def test_arquivo_sem_marcador_nao_entra(self):
+        self._arquivo("tests/sem_marcador.py", "def test_x(): pass\n")
+        tca.main(["trace", "--write"])
+        self.assertEqual(self._indice()["por_arquivo"], {})
+
+    def test_cobertura_e_lacuna_sem_universo_declarado(self):
+        self._arquivo("tests/test_turma.py", "# @tca RF-014\n")
+        tca.main(["trace", "--write"])
+        self.assertIn("_lacuna", self._indice()["cobertura"],
+                      "sem universo declarado a cobertura não é calculável, não é 100%")
+
+    def test_cobertura_com_universo_declarado(self):
+        self._arquivo("tests/test_turma.py", "# @tca RF-014\n")
+        (self.raiz / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "listar_requisitos": "python3 -c \"print('RF-014'); print('RF-099')\"",
+        }}), encoding="utf-8")
+        tca.main(["trace", "--write"])
+        cob = self._indice()["cobertura"]
+        self.assertEqual((cob["universo"], cob["cobertos"]), (2, 1))
+        self.assertEqual(cob["sem_teste"], ["RF-099"])
+
+    def test_strict_reprova_requisito_sem_teste(self):
+        self._arquivo("tests/test_turma.py", "# @tca RF-014\n")
+        (self.raiz / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "listar_requisitos": "python3 -c \"print('RF-014'); print('RF-099')\"",
+        }}), encoding="utf-8")
+        self.assertEqual(tca.main(["trace", "--strict"]), 1)
+
+    def test_indice_e_conteudo_gerado(self):
+        self._arquivo("tests/test_turma.py", "# @tca RF-014\n")
+        tca.main(["trace", "--write"])
+        self.assertIn("_gerado_por", self._indice())
+
+    def test_impacto_sem_grafo_usa_o_marcador_do_arquivo(self):
+        self._arquivo("src/turma.py", "# @tca RF-014\n")
+        self._commit("feat(turma): x [MS-021]")
+        self.assertEqual(tca.main(["trace", "--impacto", "src/turma.py"]), 0)
+
+
 class TestVerify(Base):
     def test_detecta_ciclo_aberto_sem_registro(self):
         idx = self.indice()

@@ -15,6 +15,7 @@ Comandos:
   tca close-ms <MS-ID> [...]     fecha o ciclo de uma Micro Spec
   tca verify [--strict]          coerência dos artefatos de controle
   tca diff [--cached]            snapshot-diff bidirecional contra a spec
+  tca trace [--impacto A]        índice requisito ↔ teste ↔ commit
   tca selfcheck                  a verificação está de pé?
   tca canon [--write]            integridade do conteúdo metodológico
   tca doctor [--strict]          divergência entre o projeto e o canon
@@ -58,6 +59,24 @@ P_ARCHIVE = "docs/ThronusSpec/03_Desenvolvimento/payload_archive"
 P_LOGS = "docs/ThronusSpec/05_Monitoramento/performance_logs.json"
 P_EXEC = "docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl"
 P_METRICAS = "docs/ThronusSpec/05_Monitoramento/metricas.jsonl"
+P_TRACE = "docs/ThronusSpec/03_Desenvolvimento/trace.json"
+
+# Marcador de rastreabilidade. Texto em comentário, não recurso de runner:
+# a TCA governa projetos de qualquer stack e não pode depender de marcador de
+# pytest, tag de vitest ou anotação de JUnit.
+#
+#   // @tca RF-014 RF-031 UC-003
+#   # @tca RNF-007
+#
+# Um arquivo declara os identificadores que cobre. A granularidade é de
+# arquivo, não de caso — suficiente para responder "este requisito tem teste?"
+# e "o que esta mudança afeta?", que são as duas perguntas que importam.
+MARCADOR_RE = re.compile(r"@tca\s+((?:[A-Z]{2,4}-[\d.]+[ \t]*)+)")
+ID_RE = re.compile(r"[A-Z]{2,4}-[\d.]+")
+
+# Diretórios que nunca são varridos em busca de marcador.
+VARREDURA_EXCLUI = (".git", "node_modules", "__pycache__", ".next", "dist",
+                    "build", ".venv", "vendor", "target", ".tca")
 
 # Contrato de comandos do projeto. Existe porque medir a suíte exige saber como
 # ela roda, e adivinhar isso seria inferência. O projeto declara; a TCA executa.
@@ -1103,6 +1122,173 @@ def cmd_selfcheck(args) -> int:
     return 1 if falhas else 0
 
 
+def _marcadores(raiz: Path) -> dict[str, list[str]]:
+    """Arquivo → identificadores declarados. Varre o repositório inteiro.
+
+    Não exige que o projeto declare onde ficam os testes: qualquer arquivo com
+    marcador participa do índice, inclusive código de produção que queira
+    declarar o requisito que implementa.
+    """
+    achados: dict[str, list[str]] = {}
+    # O próprio pacote fica de fora: ele documenta a convenção e os exemplos
+    # entrariam no índice como se fossem cobertura real. A TCA não é artefato
+    # de projeto.
+    pkg_rel = PKG_DIR.name if PKG_DIR.parent == raiz else None
+    for f in raiz.rglob("*"):
+        if not f.is_file():
+            continue
+        rel = f.relative_to(raiz).as_posix()
+        partes = rel.split("/")
+        if any(part in VARREDURA_EXCLUI for part in partes):
+            continue
+        if pkg_rel and partes[0] == pkg_rel:
+            continue
+        try:
+            texto = f.read_text(encoding="utf-8", errors="ignore")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if "@tca" not in texto:
+            continue
+        ids: list[str] = []
+        for m in MARCADOR_RE.finditer(texto):
+            ids += ID_RE.findall(m.group(1))
+        if ids:
+            achados[rel] = sorted(set(ids))
+    return achados
+
+
+def _ms_por_arquivo(raiz: Path) -> dict[str, list[str]]:
+    """Arquivo → Micro Specs cujos commits o tocaram. Vem do git, não de marcador."""
+    saida = _git(raiz, "log", "--no-merges", "--name-only", "--format=%x01%s")
+    if not saida:
+        return {}
+    mapa: dict[str, set] = {}
+    for bloco in saida.split("\x01"):
+        cab, _, corpo = bloco.strip("\n").partition("\n")
+        m = re.search(r"\bMS-(\d{3,})\b", cab)
+        if not m:
+            continue
+        ms = f"MS-{m.group(1)}"
+        for linha in corpo.splitlines():
+            if linha.strip():
+                mapa.setdefault(linha.strip(), set()).add(ms)
+    return {k: sorted(v) for k, v in mapa.items()}
+
+
+def cmd_trace(args) -> int:
+    """Índice de rastreabilidade: requisito ↔ arquivo ↔ Micro Spec.
+
+    O mesmo grafo serve à análise de impacto e à seleção de teste — é uma peça
+    pagando duas vezes. Não é documento mantido à mão: é índice construído a
+    partir de metadado que já precisa existir.
+    """
+    raiz = achar_raiz(Path.cwd())
+    por_arquivo = _marcadores(raiz)
+    ms_por_arquivo = _ms_por_arquivo(raiz)
+
+    # ── impacto: o que muda se eu mexer neste arquivo ──
+    if args.impacto:
+        alvo = args.impacto
+        cmds = _ler_cfg(raiz)
+        relacionados: list[str] = []
+        rodar_rel = cmds.get("testes_relacionados")
+        if rodar_rel:
+            import shlex
+            cmd = rodar_rel.replace("{arquivos}", shlex.quote(alvo))
+            cmd = re.sub(r"\s--run\b", " --run --reporter=json", cmd)
+            _c, saida, _t = _rodar(raiz, cmd, 600)
+            try:
+                d = json.loads(saida[saida.index("{"):])
+                relacionados = sorted({r["name"] for r in d.get("testResults", [])})
+                relacionados = [Path(r).relative_to(raiz).as_posix()
+                                if Path(r).is_absolute() else r for r in relacionados]
+            except Exception:
+                relacionados = []
+
+        # identificadores: do próprio arquivo e dos testes que o alcançam
+        ids = set(por_arquivo.get(alvo, []))
+        for t in relacionados:
+            ids |= set(por_arquivo.get(t, []))
+        ms = set(ms_por_arquivo.get(alvo, []))
+
+        print(f"       impacto de {alvo}")
+        print(f"       testes relacionados   {len(relacionados)}")
+        for t in relacionados[:20]:
+            print(f"         · {t}")
+        if len(relacionados) > 20:
+            print(f"         … e mais {len(relacionados) - 20}")
+        print(f"       requisitos            {', '.join(sorted(ids)) or '—'}")
+        print(f"       Micro Specs           {', '.join(sorted(ms)) or '—'}")
+        if not rodar_rel:
+            print(f"AVISO  {P_PROJETO_CFG} não declara comandos.testes_relacionados — "
+                  "sem grafo de módulos, só o marcador do próprio arquivo")
+        registrar_execucao(raiz, "trace", "ok", {
+            "impacto": alvo, "relacionados": len(relacionados), "ids": len(ids)})
+        return 0
+
+    # ── índice completo ──
+    por_id: dict[str, dict] = {}
+    for arq, ids in por_arquivo.items():
+        for i in ids:
+            e = por_id.setdefault(i, {"arquivos": [], "micro_specs": []})
+            e["arquivos"].append(arq)
+            for m in ms_por_arquivo.get(arq, []):
+                if m not in e["micro_specs"]:
+                    e["micro_specs"].append(m)
+    for e in por_id.values():
+        e["arquivos"].sort()
+        e["micro_specs"].sort()
+
+    por_tipo: dict[str, int] = {}
+    for i in por_id:
+        por_tipo[i.split("-")[0]] = por_tipo.get(i.split("-")[0], 0) + 1
+
+    # cobertura só é calculável se o universo de requisitos for declarado
+    universo, sem_cobertura = None, []
+    listar = _ler_cfg(raiz).get("listar_requisitos")
+    if listar:
+        cod, saida, _ = _rodar(raiz, listar, 120)
+        if cod == 0:
+            universo = sorted({x for x in ID_RE.findall(saida)})
+            sem_cobertura = [i for i in universo if i not in por_id]
+
+    registro = {
+        "_gerado_por": "tca trace --write — não edite; regenere",
+        "ts": agora(), "tca_versao": versao_pacote(),
+        "ref": _git(raiz, "rev-parse", "HEAD") or "desconhecida",
+        "por_identificador": por_id,
+        "por_arquivo": por_arquivo,
+        "cobertura": ({"universo": len(universo), "cobertos": len(universo) - len(sem_cobertura),
+                       "sem_teste": sem_cobertura} if universo is not None else
+                      {"_lacuna": f"{P_PROJETO_CFG} não declara comandos.listar_requisitos — "
+                                  "sem o universo declarado, cobertura de requisito não é calculável"}),
+    }
+
+    print(f"       arquivos com marcador   {len(por_arquivo)}")
+    print(f"       identificadores         {len(por_id)}"
+          + (f"  ({', '.join(f'{k}:{v}' for k, v in sorted(por_tipo.items()))})" if por_tipo else ""))
+    if universo is not None:
+        print(f"       cobertura de requisito  {len(universo) - len(sem_cobertura)}/{len(universo)}")
+        for i in sem_cobertura[:10]:
+            print(f"         SEM TESTE  {i}")
+        if len(sem_cobertura) > 10:
+            print(f"         … e mais {len(sem_cobertura) - 10}")
+    else:
+        print(f"AVISO  cobertura não calculável — {registro['cobertura']['_lacuna']}")
+
+    falhou = args.strict and (not por_arquivo or sem_cobertura)
+    if args.write:
+        escrever_json(raiz / P_TRACE, registro)
+        print(f"OK     índice em {P_TRACE}")
+    registrar_execucao(raiz, "trace", "falha" if falhou else "ok", {
+        "arquivos": len(por_arquivo), "ids": len(por_id),
+        "sem_cobertura": len(sem_cobertura), "strict": bool(args.strict)})
+    if falhou:
+        print("FALHA  rastreabilidade incompleta", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_metrics(args) -> int:
     """Linha de base do processo, derivada do que já aconteceu.
 
@@ -1502,6 +1688,12 @@ def main(argv=None) -> int:
     df.add_argument("--cached", action="store_true",
                     help="compara só o que está em staging (uso no portão de commit)")
     df.set_defaults(fn=cmd_diff)
+
+    tr = sub.add_parser("trace", help="índice requisito ↔ teste ↔ commit")
+    tr.add_argument("--write", action="store_true", help="grava o índice")
+    tr.add_argument("--strict", action="store_true", help="requisito sem teste reprova")
+    tr.add_argument("--impacto", help="o que muda se eu mexer neste arquivo")
+    tr.set_defaults(fn=cmd_trace)
 
     sc = sub.add_parser("selfcheck", help="a verificação está de pé?")
     sc.add_argument("--tolerancia", type=float, default=2.0,

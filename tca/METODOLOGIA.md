@@ -133,6 +133,35 @@ Travessão (`—`) significa nenhum arquivo. **Campo ausente é lacuna, não per
 arquivo fora da spec e **arquivo previsto que não foi entregue**. O segundo é a assinatura
 da entrega parcial, e é o que um gate unidirecional deixa passar em silêncio.
 
+### Rastreabilidade
+
+Todo arquivo que cobre um requisito o declara em comentário, com um marcador de texto —
+não com recurso de runner, porque a TCA governa projetos de qualquer stack e não pode
+depender de marcador de pytest, tag de vitest ou anotação de JUnit:
+
+```
+# @tca RF-014 UC-003
+// @tca RF-031 RNF-007
+/* @tca DS-002 */
+```
+
+A granularidade é de **arquivo**, não de caso de teste. É o suficiente para as duas
+perguntas que importam — *este requisito tem teste?* e *o que esta mudança afeta?* — e não
+exige que o projeto declare onde ficam os testes: qualquer arquivo com marcador entra no
+índice, inclusive código de produção que queira declarar o requisito que implementa.
+
+`tca trace` constrói o índice a partir desses marcadores e do histórico git, ligando
+identificador → arquivo → Micro Spec. **Não é documento mantido à mão**: é índice
+derivado de metadado que já precisa existir.
+
+`tca trace --impacto <arquivo>` responde, antes de escrever a primeira linha, quais testes
+alcançam aquele arquivo, quais requisitos ele toca e quais Micro Specs o alteraram. O
+mesmo grafo serve à análise de impacto e à seleção de teste — uma peça pagando duas vezes.
+
+**Cobertura de requisito não é calculável sem o universo declarado.** Sem uma lista
+autoritativa de requisitos, o índice diz o que os testes cobrem, não o que falta —
+e a diferença entre as duas coisas é registrada como lacuna, nunca como 100%.
+
 ### Auto-verificação do pipeline
 
 `tca selfcheck` pergunta se a própria verificação está de pé: o contrato de execução
