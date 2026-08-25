@@ -40,11 +40,17 @@ if [ -n "$falta" ]; then
   exit 1
 fi
 
-# Coerência de estado antes de deixar passar.
+# Coerência de estado e snapshot-diff antes de deixar passar.
+# O diff é bidirecional: arquivo previsto na spec e não entregue reprova tanto
+# quanto arquivo tocado fora dela.
 if command -v tca >/dev/null 2>&1; then
-  tca verify || exit 1
+  TCA=tca
 elif [ -x "tca/bin/tca" ]; then
-  ./tca/bin/tca verify || exit 1
+  TCA=./tca/bin/tca
 else
-  echo "AVISO  CLI tca não encontrado — coerência de estado não verificada" >&2
+  echo "AVISO  CLI tca não encontrado — estado e snapshot-diff não verificados" >&2
+  exit 0
 fi
+
+$TCA verify || exit 1
+$TCA diff --cached || exit 1

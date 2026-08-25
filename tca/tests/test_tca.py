@@ -137,6 +137,129 @@ class TestCloseMs(Base):
         self.assertIn("tca_versao", reg)
 
 
+class TestDiff(Base):
+    """Snapshot-diff bidirecional: o previsto e não entregue também reprova."""
+
+    @staticmethod
+    def _git(cwd, *args):
+        import subprocess
+        subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True)
+
+    def setUp(self):
+        super().setUp()
+        self._git(self.raiz, "init", "-q", "-b", "main")
+        (self.raiz / "src").mkdir(exist_ok=True)
+        for n in ("a.py", "b.py"):
+            (self.raiz / "src" / n).write_text("original\n", encoding="utf-8")
+        self._git(self.raiz, "add", "-A")
+        self._git(self.raiz, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base")
+
+    def _spec(self, linha):
+        (self.raiz / P_CTX).write_text(
+            f"**Fase atual:** GREEN\n**MS ativa:** MS-021 — X\n{linha}\n", encoding="utf-8")
+
+    def _muda(self, *nomes):
+        for n in nomes:
+            (self.raiz / n).write_text("alterado\n", encoding="utf-8")
+
+    def test_conforme_passa(self):
+        self._spec("**Arquivos a criar/modificar:** src/a.py, src/b.py")
+        self._muda("src/a.py", "src/b.py")
+        self.assertEqual(tca.main(["diff"]), 0)
+
+    def test_detecta_previsto_e_nao_entregue(self):
+        """O caso que passava sem ruído: a spec previa, o commit não trouxe."""
+        self._spec("**Arquivos a criar/modificar:** src/a.py, src/b.py")
+        self._muda("src/a.py")
+        self.assertEqual(tca.main(["diff"]), 1)
+
+    def test_detecta_inesperado(self):
+        self._spec("**Arquivos a criar/modificar:** src/a.py")
+        self._muda("src/a.py", "src/b.py")
+        self.assertEqual(tca.main(["diff"]), 1)
+
+    def test_aceita_lista_em_marcadores(self):
+        (self.raiz / P_CTX).write_text(
+            "**MS ativa:** MS-021 — X\n"
+            "**Arquivos a criar/modificar:**\n- src/a.py\n- src/b.py\n\n"
+            "**Cenários BDD:** CT-01\n", encoding="utf-8")
+        self._muda("src/a.py", "src/b.py")
+        self.assertEqual(tca.main(["diff"]), 0)
+
+    def test_campo_ausente_e_lacuna_nao_aprovacao(self):
+        (self.raiz / P_CTX).write_text("**MS ativa:** MS-021 — X\n", encoding="utf-8")
+        self._muda("src/a.py")
+        self.assertEqual(tca.main(["diff"]), 2, "sem lista prevista não se aprova por omissão")
+
+    def test_travessao_significa_nenhum_arquivo(self):
+        self._spec("**Arquivos a criar/modificar:** —")
+        self.assertEqual(tca.main(["diff"]), 0)
+        self._muda("src/a.py")
+        self.assertEqual(tca.main(["diff"]), 1, "nada previsto mas algo tocado deve reprovar")
+
+    def test_artefatos_de_controle_nao_contam(self):
+        """Todo commit de fechamento toca activeContext e índice — se contassem,
+        o portão reprovaria sempre e viraria ruído."""
+        self._spec("**Arquivos a criar/modificar:** src/a.py")
+        self._muda("src/a.py")
+        (self.raiz / P_INDEX).write_text('{"estado_da_trilha":{"fase_atual":"COMMIT"}}',
+                                         encoding="utf-8")
+        self.assertEqual(tca.main(["diff"]), 0)
+
+    def test_emite_evidencia(self):
+        self._spec("**Arquivos a criar/modificar:** src/a.py")
+        self._muda("src/a.py")
+        tca.main(["diff"])
+        reg = json.loads((self.raiz / P_EXEC).read_text(encoding="utf-8").strip().splitlines()[-1])
+        self.assertEqual(reg["comando"], "diff")
+        self.assertIn("faltantes", reg["detalhes"])
+
+
+class TestSelfcheck(Base):
+    """A verificação está de pé? — responde ao CI que rodava sem banco."""
+
+    def _cfg(self, **comandos):
+        (self.raiz / tca.P_PROJETO_CFG).write_text(
+            json.dumps({"comandos": comandos}), encoding="utf-8")
+
+    def _medicao(self, testes, host=None, resultado="ok"):
+        amb = tca.ambiente()
+        reg = {"ts": "2026-08-25T10:00:00-03:00", "ref": "abc", "tca_versao": "9.9.9",
+               "ambiente": {**amb, "host": host or amb["host"]},
+               "indicadores": {
+                   "suite_testes": {"valor": testes, "origem": "derivado:execucao"},
+                   "suite_segundos": {"valor": 10, "origem": "derivado:execucao",
+                                      "resultado": resultado}},
+               "nao_instrumentado": []}
+        with (self.raiz / tca.P_METRICAS).open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(reg) + "\n")
+
+    def test_sem_contrato_de_execucao_reprova(self):
+        self.assertEqual(tca.main(["selfcheck"]), 1,
+                         "sem comandos.testes não se afirma que a suíte roda")
+
+    def test_queda_na_contagem_reprova(self):
+        self._cfg(testes="python3 -c \"pass\"", contar_testes="python3 -c \"print(500)\"")
+        self._medicao(1000)
+        self.assertEqual(tca.main(["selfcheck"]), 1, "queda de 1000 para 500 deve reprovar")
+
+    def test_variacao_dentro_da_tolerancia_passa(self):
+        self._cfg(testes="python3 -c \"pass\"", contar_testes="python3 -c \"print(999)\"")
+        self._medicao(1000)
+        self.assertEqual(tca.main(["selfcheck"]), 0)
+
+    def test_suite_que_falhou_na_ultima_medicao_reprova(self):
+        self._cfg(testes="python3 -c \"pass\"", contar_testes="python3 -c \"print(1000)\"")
+        self._medicao(1000, resultado="exit 1")
+        self.assertEqual(tca.main(["selfcheck"]), 1)
+
+    def test_medicao_de_outra_maquina_nao_serve_de_base(self):
+        self._cfg(testes="python3 -c \"pass\"", contar_testes="python3 -c \"print(10)\"")
+        self._medicao(1000, host="outra-maquina")
+        self.assertEqual(tca.main(["selfcheck"]), 0,
+                         "sem base desta máquina, avisa em vez de reprovar por comparação inválida")
+
+
 class TestVerify(Base):
     def test_detecta_ciclo_aberto_sem_registro(self):
         idx = self.indice()

@@ -85,6 +85,9 @@ jobs:
           ./tca/bin/tca verify
           ./tca/bin/tca doctor --strict
 
+      - name: A verificação está de pé?
+        run: ./tca/bin/tca selfcheck
+
       - name: Testes do pacote tca
         run: python3 tca/tests/test_tca.py
 

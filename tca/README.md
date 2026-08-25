@@ -75,6 +75,48 @@ Com `--strict`, archive fora do núcleo obrigatório também reprova. Sem a flag
 — projetos existentes têm archives legados e o comando não deve travá-los antes da
 triagem.
 
+### `tca diff [--cached]`
+
+**Snapshot-diff bidirecional.** Compara os arquivos tocados com a lista prevista em
+`**Arquivos a criar/modificar:**` do `activeContext.md`, e reprova nos dois sentidos:
+
+| Saída | Significado |
+|---|---|
+| `INESPERADO` | tocado sem estar previsto na spec |
+| `FALTANTE` | **previsto na spec e não entregue** |
+
+O segundo caso é o que passava sem ruído. O gate descrito nos skills procura arquivo
+inesperado; arquivo previsto que não apareceu não gerava sinal — e é essa a assinatura da
+entrega parcial. Foi o que deixou a deleção de uma rota ir a produção como se nunca
+tivesse sido decidida.
+
+Campo ausente é **lacuna, não aprovação**: sem lista prevista o comando falha em vez de
+passar por omissão. Travessão significa "nenhum arquivo", que é diferente de não declarar.
+
+Os artefatos que a própria TCA governa — `activeContext`, índice, archives, logs, lock,
+configuração — **não contam**. Todo commit de fechamento os toca, e contá-los faria o
+portão reprovar sempre até virar ruído que se aprende a ignorar. Eles são governados pelo
+`verify`.
+
+`--cached` compara só o que está em staging: é a forma usada pelo portão de commit.
+
+### `tca selfcheck`
+
+**A verificação está de pé?** Responde ao incidente em que um estágio de integração
+contínua rodava sem banco: toda execução falhava, o estágio dependente nunca era
+alcançado, e o desconhecimento durou dias porque nada perguntava se a própria verificação
+executava.
+
+Reprova quando:
+
+- o projeto não declara `comandos.testes` — sem contrato não se afirma que a suíte roda;
+- a contagem de testes **caiu** além da tolerância em relação à última medição desta
+  máquina — o sinal de suíte que parou de executar;
+- a última execução registrada da suíte terminou em erro.
+
+A comparação é sempre contra medição do **mesmo ambiente**. Sem base local, avisa em vez
+de reprovar — comparar máquinas diferentes seria pior que não comparar.
+
 ### `tca canon [--write]`
 
 Integridade do **conteúdo metodológico** — o que, alterado, muda o resultado que o método

@@ -13,6 +13,8 @@ Comandos:
   tca verify-self                integridade do próprio pacote (MANIFEST.sha256)
   tca close-ms <MS-ID> [...]     fecha o ciclo de uma Micro Spec
   tca verify [--strict]          coerência dos artefatos de controle
+  tca diff [--cached]            snapshot-diff bidirecional contra a spec
+  tca selfcheck                  a verificação está de pé?
   tca canon [--write]            integridade do conteúdo metodológico
   tca doctor [--strict]          divergência entre o projeto e o canon
   tca agents [--write]           gera/verifica o AGENTS.md
@@ -121,6 +123,19 @@ P_LOCK = "tca.lock.json"
 # nunca editado. Não é versionado: é estado derivado e específico da máquina —
 # versionar faria o ajuste de um ambiente governar os demais.
 P_TUNING = ".tca/tuning-{host}.json"
+
+# Artefatos que a própria TCA governa. O snapshot-diff compara mudança de
+# PRODUTO contra a spec; estes são controlados pelo `verify` e apareceriam como
+# inesperados em todo commit de fechamento, tornando o portão inútil.
+ARTEFATOS_DE_CONTROLE = (
+    P_CTX, P_INDEX, P_ARCHIVE, P_LOGS, P_EXEC, P_METRICAS,
+    P_LOCK, P_PROJETO_CFG, P_OVERRIDES, ".tca/",
+)
+
+
+def _e_artefato_de_controle(caminho: str) -> bool:
+    return any(caminho == a or caminho.startswith(a.rstrip("/") + "/")
+               for a in ARTEFATOS_DE_CONTROLE)
 
 
 class TcaError(Exception):
@@ -232,6 +247,43 @@ def registrar_execucao(raiz: Path, comando: str, resultado: str, detalhes: dict)
 
 
 # ── activeContext ────────────────────────────────────────────────────────────
+
+def arquivos_declarados(texto: str) -> list[str] | None:
+    """Arquivos que a spec prevê criar ou modificar.
+
+    Devolve None quando o campo não existe — ausente é diferente de vazio.
+    Campo ausente vira lacuna; campo com travessão significa "nenhum".
+
+    Aceita as duas formas que o artefato usa:
+        **Arquivos a criar/modificar:** src/a.py, src/b.py
+        **Arquivos a criar/modificar:**
+        - src/a.py
+        - src/b.py
+    """
+    m = re.search(r"^\*\*Arquivos a criar/modificar:\*\*(.*)$", texto, re.MULTILINE)
+    if not m:
+        return None
+    resto = m.group(1).strip()
+    if resto in ("—", "-", "–"):
+        return []
+    itens: list[str] = []
+    if resto:
+        itens += [p.strip() for p in re.split(r"[,\s]+", resto) if p.strip()]
+    # lista em marcadores nas linhas seguintes. A quebra de linha logo após o
+    # campo produz um item vazio que não pode encerrar a leitura antes de começar.
+    for linha in texto[m.end():].splitlines():
+        alvo = linha.strip()
+        if not alvo:
+            if itens:
+                break          # linha vazia depois da lista encerra
+            continue           # linha vazia antes da lista é só a quebra do campo
+        if alvo.startswith("**"):
+            break              # próximo campo
+        if not alvo.startswith(("-", "*", "•")):
+            break              # texto que não é item encerra
+        itens.append(alvo.lstrip("-*• ").strip())
+    return [i for i in itens if i and i not in ("—", "-", "–")]
+
 
 def ms_ativa_no_contexto(texto: str) -> str | None:
     """Lê o campo `**MS ativa:**`. Travessão, vazio ou ausência = sem MS ativa."""
@@ -904,6 +956,119 @@ def _medir_loop(raiz: Path, timeout: int, amostra: int, total_testes: int | None
     return saida
 
 
+def cmd_diff(args) -> int:
+    """Snapshot-diff bidirecional: o previsto e não entregue também reprova.
+
+    O gate descrito nos skills procura arquivo inesperado. Arquivo previsto que
+    não apareceu passava sem ruído — e é essa a assinatura da entrega parcial.
+    """
+    raiz = achar_raiz(Path.cwd())
+    ctx_path = raiz / P_CTX
+    if not ctx_path.exists():
+        raise TcaError(f"{P_CTX} não existe — não há spec contra a qual comparar.")
+    texto = ctx_path.read_text(encoding="utf-8")
+    declarados = arquivos_declarados(texto)
+    if declarados is None:
+        raise TcaError(
+            f"{P_CTX} não declara `**Arquivos a criar/modificar:**`.\n"
+            "Sem lista prevista não há snapshot-diff — lacuna, não aprovação."
+        )
+
+    faixa = ["--cached"] if args.cached else ["HEAD"]
+    saida = _git(raiz, "diff", "--name-only", *faixa)
+    if saida is None:
+        raise TcaError("não foi possível ler o diff do git")
+    tocados = {l.strip() for l in saida.splitlines()
+               if l.strip() and not _e_artefato_de_controle(l.strip())}
+    previstos = set(declarados)
+
+    inesperados = sorted(tocados - previstos)
+    faltantes = sorted(previstos - tocados)
+    ok = sorted(tocados & previstos)
+
+    for f in inesperados:
+        print(f"INESPERADO {f}")
+    for f in faltantes:
+        print(f"FALTANTE   {f}  (previsto na spec, não entregue)")
+
+    falhou = bool(inesperados or faltantes)
+    registrar_execucao(raiz, "diff", "falha" if falhou else "ok", {
+        "previstos": len(previstos), "tocados": len(tocados),
+        "inesperados": len(inesperados), "faltantes": len(faltantes),
+        "cached": bool(args.cached),
+    })
+    print(f"{'FALHA' if falhou else 'OK':<6} snapshot-diff — {len(ok)} conforme · "
+          f"{len(inesperados)} inesperados · {len(faltantes)} faltantes "
+          f"(artefatos de controle não contam)")
+    return 1 if falhou else 0
+
+
+def cmd_selfcheck(args) -> int:
+    """A verificação está de pé?
+
+    Responde ao incidente em que um estágio de teste rodava sem banco: toda
+    execução falhava, o estágio dependente nunca era alcançado, e o
+    desconhecimento durou dias porque ninguém perguntava se a própria
+    verificação executava.
+    """
+    raiz = achar_raiz(Path.cwd())
+    amb = ambiente()
+    falhas, avisos = [], []
+
+    # 1. O contrato de execução existe?
+    cmds = _ler_cfg(raiz)
+    if not cmds.get("testes"):
+        falhas.append(f"{P_PROJETO_CFG} não declara comandos.testes — "
+                      "não há como afirmar que a suíte roda")
+    if not cmds.get("contar_testes"):
+        avisos.append(f"{P_PROJETO_CFG} não declara comandos.contar_testes — "
+                      "queda silenciosa na contagem fica indetectável")
+
+    # 2. A contagem caiu? É o sinal de suíte que parou de executar.
+    atual = None
+    if cmds.get("contar_testes"):
+        med = _contar_testes(raiz, args.timeout)
+        atual = med.get("suite_testes", {}).get("valor")
+        if atual is None:
+            falhas.append("contar_testes não devolveu um inteiro — contagem indisponível")
+
+    anterior = None
+    reg = _ultimo_registro_do_ambiente(raiz, amb["host"])
+    if reg:
+        anterior = reg.get("indicadores", {}).get("suite_testes", {}).get("valor")
+
+    if atual is not None and anterior is not None:
+        queda = anterior - atual
+        margem = max(1, int(anterior * args.tolerancia / 100))
+        if queda > margem:
+            falhas.append(f"contagem de testes caiu de {anterior} para {atual} "
+                          f"(queda de {queda}, tolerância {margem})")
+        else:
+            print(f"       contagem {atual} contra {anterior} da última medição — dentro da tolerância")
+    elif atual is not None:
+        avisos.append(f"sem medição anterior nesta máquina para comparar "
+                      f"({atual} testes agora) — rode: tca metrics --contar-testes --write")
+
+    # 3. A última medição de suíte registrada passou?
+    if reg:
+        res = reg.get("indicadores", {}).get("suite_segundos", {}).get("resultado")
+        if res and res != "ok":
+            falhas.append(f"última execução registrada da suíte terminou em {res}")
+
+    for a in avisos:
+        print(f"AVISO  {a}")
+    for f in falhas:
+        print(f"FALHA  {f}", file=sys.stderr)
+
+    registrar_execucao(raiz, "selfcheck", "falha" if falhas else "ok", {
+        "testes_agora": atual, "testes_antes": anterior,
+        "falhas": len(falhas), "avisos": len(avisos),
+    })
+    print(f"{'FALHA' if falhas else 'OK':<6} verificação de pé — "
+          f"{len(falhas)} falhas · {len(avisos)} avisos")
+    return 1 if falhas else 0
+
+
 def cmd_metrics(args) -> int:
     """Linha de base do processo, derivada do que já aconteceu.
 
@@ -1294,6 +1459,17 @@ def main(argv=None) -> int:
     v = sub.add_parser("verify", help="coerência dos artefatos de controle")
     v.add_argument("--strict", action="store_true", help="núcleo de archive incompleto reprova")
     v.set_defaults(fn=cmd_verify)
+
+    df = sub.add_parser("diff", help="snapshot-diff bidirecional contra a spec")
+    df.add_argument("--cached", action="store_true",
+                    help="compara só o que está em staging (uso no portão de commit)")
+    df.set_defaults(fn=cmd_diff)
+
+    sc = sub.add_parser("selfcheck", help="a verificação está de pé?")
+    sc.add_argument("--tolerancia", type=float, default=2.0,
+                    help="queda percentual tolerada na contagem de testes (padrão 2%%)")
+    sc.add_argument("--timeout", type=int, default=600, help="limite em segundos")
+    sc.set_defaults(fn=cmd_selfcheck)
 
     k = sub.add_parser("canon", help="integridade do conteúdo metodológico")
     k.add_argument("--write", action="store_true", help="regenera CANON.sha256 a partir do repositório")
