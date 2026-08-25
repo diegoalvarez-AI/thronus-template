@@ -78,6 +78,7 @@ jobs:
       - name: Portões da TCA (pacote executável)
         run: |
           ./tca/bin/tca version
+          ./tca/bin/tca manifest
           ./tca/bin/tca verify-self
           ./tca/bin/tca canon
           ./tca/bin/tca agents

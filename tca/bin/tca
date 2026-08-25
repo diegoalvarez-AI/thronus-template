@@ -11,6 +11,7 @@ de stack e não pode impor runtime ao projeto que governa.
 Comandos:
   tca version                    versão e hash do pacote
   tca verify-self                integridade do próprio pacote (MANIFEST.sha256)
+  tca manifest [--write]         gera/verifica o MANIFEST.sha256
   tca close-ms <MS-ID> [...]     fecha o ciclo de uma Micro Spec
   tca verify [--strict]          coerência dos artefatos de controle
   tca diff [--cached]            snapshot-diff bidirecional contra a spec
@@ -43,6 +44,12 @@ from shlex import quote as shlex_quote
 
 PKG_DIR = Path(__file__).resolve().parent.parent
 MANIFEST = PKG_DIR / "MANIFEST.sha256"     # integridade do código do pacote
+
+# O que nunca entra no manifesto. Bytecode existe na máquina de quem rodou os
+# testes e não existe em checkout limpo: incluí-lo faz o verify-self passar
+# localmente e falhar no CI — a classe de defeito que este método existe para
+# eliminar.
+MANIFEST_EXCLUI = ("__pycache__", ".pyc", ".tca-tmp", "MANIFEST.sha256")
 CANON = PKG_DIR / "CANON.sha256"           # integridade do conteúdo metodológico
 
 # ── Caminhos que o contrato possui ───────────────────────────────────────────
@@ -310,6 +317,33 @@ CTX_VAZIO = """# Active Context — TCA Session RAM
 
 def cmd_version(_args) -> int:
     print(f"tca {versao_pacote()} · manifesto {hash_manifesto()}")
+    return 0
+
+
+def _arquivos_do_pacote() -> list[Path]:
+    return sorted(
+        f for f in PKG_DIR.rglob("*")
+        if f.is_file() and not any(x in str(f.relative_to(PKG_DIR)) for x in MANIFEST_EXCLUI)
+    )
+
+
+def cmd_manifest(args) -> int:
+    """Gera ou confere o MANIFEST.sha256.
+
+    Existe porque gerar o manifesto com um comando digitado à mão é passo que
+    depende de disciplina — e foi assim que bytecode entrou no manifesto e
+    quebrou o verify-self em checkout limpo.
+    """
+    linhas = [f"{sha256(f)}  {f.relative_to(PKG_DIR).as_posix()}" for f in _arquivos_do_pacote()]
+    if args.write:
+        MANIFEST.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+        print(f"OK     MANIFEST.sha256 escrito — {len(linhas)} arquivos")
+        return 0
+    atual = MANIFEST.read_text(encoding="utf-8") if MANIFEST.exists() else ""
+    if atual.strip() != "\n".join(linhas).strip():
+        print("FALHA  MANIFEST.sha256 desatualizado — rode: tca manifest --write", file=sys.stderr)
+        return 1
+    print(f"OK     MANIFEST.sha256 em dia — {len(linhas)} arquivos")
     return 0
 
 
@@ -1448,6 +1482,10 @@ def main(argv=None) -> int:
 
     sub.add_parser("version", help="versão e hash do pacote").set_defaults(fn=cmd_version)
     sub.add_parser("verify-self", help="integridade do próprio pacote").set_defaults(fn=cmd_verify_self)
+
+    mf = sub.add_parser("manifest", help="gera/verifica o MANIFEST.sha256")
+    mf.add_argument("--write", action="store_true", help="regenera o manifesto")
+    mf.set_defaults(fn=cmd_manifest)
 
     c = sub.add_parser("close-ms", help="fecha o ciclo de uma Micro Spec")
     c.add_argument("ms_id", help="identificador, formato MS-NNN")

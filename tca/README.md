@@ -296,6 +296,15 @@ do que rodar — não com um valor inventado.
 declarou. O arquivo gerado é por máquina e não é versionado — versionar faria o ajuste de
 um ambiente governar os demais.
 
+### `tca manifest [--write]`
+
+Gera ou confere o `MANIFEST.sha256`. Existe porque gerar o manifesto com um comando
+digitado à mão é passo que depende de disciplina — e foi assim que bytecode entrou no
+manifesto e quebrou o `verify-self` em checkout limpo, passando localmente porque o
+arquivo existia na máquina de quem rodou os testes.
+
+`__pycache__`, `.pyc`, temporários e o próprio manifesto nunca entram.
+
 ### `tca verify-self`
 
 Confere `MANIFEST.sha256` contra o conteúdo do pacote. A TCA é fonte canônica: precisa

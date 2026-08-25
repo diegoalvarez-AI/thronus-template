@@ -818,6 +818,19 @@ class TestPacote(unittest.TestCase):
     def test_manifesto_integro(self):
         self.assertEqual(tca.main(["verify-self"]), 0)
 
+    def test_manifesto_em_dia(self):
+        self.assertEqual(tca.main(["manifest"]), 0,
+                         "manifesto desatualizado — rode: tca manifest --write")
+
+    def test_bytecode_nunca_entra_no_manifesto(self):
+        """Bytecode existe na máquina de quem rodou os testes e não existe em
+        checkout limpo. Incluí-lo faz o verify-self passar aqui e falhar no CI."""
+        listados = [f.relative_to(PKG).as_posix() for f in tca._arquivos_do_pacote()]
+        for nome in listados:
+            self.assertNotIn("__pycache__", nome)
+            self.assertFalse(nome.endswith(".pyc"), nome)
+        self.assertNotIn("MANIFEST.sha256", listados, "o manifesto não se lista")
+
     def test_ms_ativa_reconhece_ausencia(self):
         for vazio in ("**MS ativa:** —", "**MS ativa:**", "**MS ativa:** -", "sem campo"):
             self.assertIsNone(tca.ms_ativa_no_contexto(vazio), repr(vazio))
