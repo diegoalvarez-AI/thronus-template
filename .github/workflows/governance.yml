@@ -123,18 +123,35 @@ jobs:
 
       - name: Independência de harness
         run: |
-          # A metodologia canônica vive em AGENTS.md. Nenhum outro artefato pode
-          # citar ferramenta de harness pelo nome — só as capacidades CAP-*.
+          # Duas regras distintas, que a versão anterior confundia numa só.
+          #
+          # (1) FERRAMENTA de harness pelo nome é proibida em qualquer lugar:
+          #     depender dela é o que quebra a portabilidade. Use CAP-*.
+          # (2) PRODUTO de harness pelo nome é proibido fora dos arquivos que
+          #     existem justamente para mapeá-lo. O Contrato de Harness
+          #     (METODOLOGIA §0) e o README precisam nomear os adaptadores —
+          #     nomear a lista de destinos é o oposto de depender de um deles.
+          #
           # governance.yml se exclui: o padrão de busca contém os próprios termos.
           [ -f AGENTS.md ] || { echo "::error::AGENTS.md ausente"; exit 1; }
-          hits=$(grep -rIn --exclude-dir=.git \
+
+          ferramentas=$(grep -rIn --exclude-dir=.git --exclude=governance.yml \
+                   -E 'EnterPlanMode|Scout subagent|Agent Scout' . || true)
+          if [ -n "$ferramentas" ]; then
+            echo "::error::ferramenta de harness citada pelo nome — use as capacidades CAP-*:"
+            echo "$ferramentas"
+            exit 1
+          fi
+
+          produtos=$(grep -rIn --exclude-dir=.git \
                    --exclude=AGENTS.md --exclude=CLAUDE.md \
                    --exclude=GEMINI.md --exclude=.cursorrules \
                    --exclude=governance.yml \
-                   -E 'EnterPlanMode|Scout subagent|Agent Scout|Claude Code' . || true)
-          if [ -n "$hits" ]; then
-            echo "::error::referência a harness fora de AGENTS.md — use as capacidades CAP-*:"
-            echo "$hits"
+                   --exclude=METODOLOGIA.md --exclude=README.md \
+                   -E 'Claude Code|Codex|Cursor|Gemini CLI|Aider' . || true)
+          if [ -n "$produtos" ]; then
+            echo "::error::harness citado fora do Contrato de Harness:"
+            echo "$produtos"
             exit 1
           fi
           echo "✓ metodologia independente de harness"
