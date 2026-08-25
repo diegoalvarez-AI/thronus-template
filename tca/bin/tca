@@ -1753,14 +1753,16 @@ def cmd_metrics(args) -> int:
     from datetime import datetime as _dt
 
     raiz = Path(args.repo).resolve() if args.repo else achar_raiz(Path.cwd())
-    if not (raiz / ".git").exists():
-        raise TcaError(f"{raiz} não é um repositório git — sem histórico não há linha de base.")
-
-    por_ms = _commits_por_ms(raiz, args.desde)
+    # Sem git não há indicador derivado de histórico — mas os que vêm da trilha
+    # de execução continuam válidos. Acoplar tudo ao git impediria medir custo
+    # de fase em projeto sem histórico de MS.
+    tem_git = (raiz / ".git").exists()
+    por_ms = _commits_por_ms(raiz, args.desde) if tem_git else {}
     sem_historico = not por_ms
     if sem_historico:
-        print("AVISO  nenhum commit cita MS-NNN no assunto — indicadores de MS não deriváveis.")
-        print("       A convenção Conventional Commits com MS-ID é o que os torna mensuráveis.")
+        motivo = ("não é repositório git" if not tem_git
+                  else "nenhum commit cita MS-NNN no assunto")
+        print(f"AVISO  {motivo} — indicadores de MS não deriváveis.")
 
     def _quando(c):
         return _dt.fromisoformat(c["data"])
@@ -1834,9 +1836,10 @@ def cmd_metrics(args) -> int:
     registro = {
         "ts": agora(),
         "repo": raiz.name,
-        "ref": _git(raiz, "rev-parse", "HEAD") or "desconhecida",
+        "ref": (_git(raiz, "rev-parse", "HEAD") or "desconhecida") if tem_git else "sem-git",
         "tca_versao": versao_pacote(),
         "ambiente": ambiente(),
+        "_tem_git": tem_git,
         "janela": {"desde": datas[0][:10] if datas else None,
                    "ate": datas[-1][:10] if datas else None},
         "indicadores": indicadores,

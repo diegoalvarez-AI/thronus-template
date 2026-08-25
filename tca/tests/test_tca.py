@@ -531,6 +531,12 @@ class TestFase(Base):
         self.assertEqual(reg["detalhes"]["ms"], "MS-021")
         self.assertEqual(reg["detalhes"]["de"], "SPEC")
 
+    def test_metrics_funciona_sem_git(self):
+        """Custo de fase vem da trilha, não do histórico: exigir git seria
+        acoplamento indevido."""
+        self.assertEqual(tca.main(["metrics", "--write"]), 0)
+        self.assertTrue((self.raiz / tca.P_METRICAS).exists())
+
     def test_custo_por_fase_exige_marcacoes(self):
         """Sem marcação, é lacuna declarada — não zero."""
         tca.main(["metrics", "--write"])
