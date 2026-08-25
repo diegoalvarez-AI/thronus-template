@@ -68,6 +68,12 @@ O pipeline TCA se adapta ao perfil do projeto. O perfil ativo está em `payload_
 
 Toda solicitação de desenvolvimento deve acionar `docs/ThronusSpec/02_Setup/tcaOrchestratorSkill.md`.
 
+**Antes do pipeline.** A TCA recebe um projeto já contratado. O que converte oportunidade
+diagnosticada em escopo comprometido é o **Discovery Thronus**, em
+`docs/ThronusSpec/01_Discovery/` — método PONTE, quatro portões não compensatórios e o
+Documento de Entrada, que parametriza perfil, tipo, nível de garantia,
+`requisitos_do_produto` e `verificacoes`. Sem ele o pipeline abaixo começa adivinhando.
+
 **Fases Pré-Código (independentes de tecnologia):**
 1. **[ESTADO_DISCOVERY]** → `discoverySkill.md` — Problema canônico, stakeholders, critérios de sucesso
 2. **[ESTADO_FUNCTIONAL]** → `functionalModelingSkill.md` — Glossário, entidades, casos de uso, backlog de MSs

@@ -127,6 +127,7 @@ FASES_DE_SPEC = ("SPEC", "PLAN")
 # Conteúdo metodológico: o que, alterado, muda o resultado que o método produz.
 # Caminhos relativos à raiz do projeto — a mesma em template e derivados.
 CANON_GLOBS = (
+    "docs/ThronusSpec/01_Discovery/*.md",
     "docs/ThronusSpec/02_Setup/*.md",
     "profiles/*.json",
     "tca/METODOLOGIA.md",
