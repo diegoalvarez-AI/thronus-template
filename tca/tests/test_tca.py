@@ -490,6 +490,51 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(tca.main(["metrics"]), 0)
         self.assertFalse((self.dir / tca.P_METRICAS).exists())
 
+    def test_mede_suite_pelo_contrato_declarado(self):
+        (self.dir / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "testes": "python3 -c \"pass\"",
+            "contar_testes": "python3 -c \"print(17)\"",
+        }}), encoding="utf-8")
+        self.assertEqual(tca.main(["metrics", "--write", "--medir-suite"]), 0)
+        ind = self._registro()
+        self.assertEqual(ind["suite_segundos"]["origem"], "derivado:execucao")
+        self.assertEqual(ind["suite_testes"]["valor"], 17)
+        self.assertNotIn("suite_segundos", " ".join(
+            json.loads((self.dir / tca.P_METRICAS).read_text(encoding="utf-8")
+                       .strip().splitlines()[-1])["nao_instrumentado"]),
+            "medido não pode constar como não instrumentado")
+
+    def test_sem_contrato_vira_lacuna_e_nao_adivinha(self):
+        self.assertEqual(tca.main(["metrics", "--write", "--medir-suite"]), 0)
+        reg = json.loads((self.dir / tca.P_METRICAS).read_text(encoding="utf-8")
+                         .strip().splitlines()[-1])
+        self.assertNotIn("suite_segundos", reg["indicadores"])
+        self.assertTrue(any(tca.P_PROJETO_CFG in n for n in reg["nao_instrumentado"]),
+                        "ausência de contrato deve virar lacuna declarada")
+
+    def test_suite_que_falha_e_registrada_como_falha(self):
+        (self.dir / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "testes": "python3 -c \"import sys; sys.exit(3)\"",
+        }}), encoding="utf-8")
+        tca.main(["metrics", "--write", "--medir-suite"])
+        self.assertEqual(self._registro()["suite_segundos"]["resultado"], "exit 3")
+
+    def test_contar_testes_fora_do_contrato_vira_lacuna(self):
+        (self.dir / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "testes": "python3 -c \"pass\"",
+            "contar_testes": "python3 -c \"print('dezessete')\"",
+        }}), encoding="utf-8")
+        tca.main(["metrics", "--write", "--medir-suite"])
+        d = self._registro()["suite_testes"]
+        self.assertIsNone(d["valor"])
+        self.assertEqual(d["origem"], "lacuna")
+
+    def test_detectar_nao_executa(self):
+        (self.dir / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+        (self.dir / "marcador").write_text("intacto", encoding="utf-8")
+        self.assertEqual(tca.main(["metrics", "--detectar"]), 0)
+        self.assertFalse((self.dir / tca.P_METRICAS).exists(), "detectar não escreve")
+
     def test_valor_reportado_e_marcado_como_tal(self):
         tca.main(["metrics", "--write", "--suite-segundos", "93"])
         d = self._registro()["suite_segundos"]

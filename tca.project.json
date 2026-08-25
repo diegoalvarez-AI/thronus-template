@@ -1,0 +1,6 @@
+{
+  "comandos": {
+    "testes": "python3 tca/tests/test_tca.py",
+    "contar_testes": "python3 tca/tests/test_tca.py 2>&1 | sed -n 's/^Ran \\([0-9]*\\) tests.*/\\1/p'"
+  }
+}

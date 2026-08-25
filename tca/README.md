@@ -189,11 +189,32 @@ produtividade" é a mesma declaração não verificável que o método critica.
 proveniência aplicada à própria medição: um número derivado de 8 de 41 archives não vale o
 mesmo que um derivado de 104 commits, e a saída diz qual é qual.
 
-O que não é instrumentável hoje aparece como **lacuna declarada**, não estimado:
+#### Medição automática da suíte
+
+`--medir-suite` executa e cronometra o comando que o projeto declara em
+`tca.project.json`, e registra o resultado como `derivado:execucao` — não como reportado:
+
+```json
+{
+  "comandos": {
+    "testes": "pytest -q",
+    "contar_testes": "pytest --collect-only -q | grep -c '::'"
+  }
+}
+```
+
+`contar_testes` precisa imprimir **somente um inteiro** em stdout. É contrato, não
+formato adivinhado: sem ele, o número vira lacuna em vez de vir de parsing heurístico da
+saída de um runner.
+
+Sem `tca.project.json`, o comando **não adivinha** — registra a ausência como lacuna.
+`--detectar` sugere o que declarar com base nos arquivos presentes, e nunca executa nada
+por conta própria. Suíte que falha é registrada com o código de saída, porque tempo de
+suíte quebrada não é o mesmo indicador que tempo de suíte verde.
+
+O que continua não instrumentável aparece como **lacuna declarada**, não estimado:
 
 - `token_por_ms` — o harness não expõe consumo ao processo;
-- `suite_segundos` — depende do runner do projeto; informe por `--suite-segundos` e o valor
-  fica marcado como `reportado`;
 - `ms_estacionadas` e `tempo_de_fila` — exigem a triagem de não conformidade em classes,
   que ainda não existe.
 

@@ -88,6 +88,22 @@ jobs:
       - name: Testes do pacote tca
         run: python3 tca/tests/test_tca.py
 
+      - name: Indicadores do processo
+        run: |
+          ./tca/bin/tca metrics --medir-suite --write
+          {
+            echo '### Indicadores TCA'
+            echo '```'
+            ./tca/bin/tca metrics --medir-suite
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: metricas-tca
+          path: docs/ThronusSpec/05_Monitoramento/metricas.jsonl
+          if-no-files-found: warn
+
       - name: Independência de harness
         run: |
           # A metodologia canônica vive em AGENTS.md. Nenhum outro artefato pode

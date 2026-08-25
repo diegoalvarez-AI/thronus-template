@@ -1,1 +1,2 @@
 docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl merge=union
+docs/ThronusSpec/05_Monitoramento/metricas.jsonl merge=union

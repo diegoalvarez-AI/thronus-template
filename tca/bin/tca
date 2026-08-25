@@ -46,6 +46,24 @@ P_ARCHIVE = "docs/ThronusSpec/03_Desenvolvimento/payload_archive"
 P_LOGS = "docs/ThronusSpec/05_Monitoramento/performance_logs.json"
 P_EXEC = "docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl"
 P_METRICAS = "docs/ThronusSpec/05_Monitoramento/metricas.jsonl"
+
+# Contrato de comandos do projeto. Existe porque medir a suíte exige saber como
+# ela roda, e adivinhar isso seria inferência. O projeto declara; a TCA executa.
+#   {"comandos": {"testes": "pytest -q",
+#                 "contar_testes": "pytest --collect-only -q | tail -1"}}
+# `contar_testes` deve imprimir SOMENTE um inteiro em stdout — sem contrato de
+# saída não há como derivar o número sem inferir formato de runner.
+P_PROJETO_CFG = "tca.project.json"
+
+# Sugestões de detecção. NUNCA executadas automaticamente: o operador confirma
+# e declara. Ausência de declaração produz lacuna, não valor padrão.
+DETECCAO = (
+    ("pytest.ini", "pytest -q", "pytest --collect-only -q | grep -c '::'"),
+    ("pyproject.toml", "pytest -q", "pytest --collect-only -q | grep -c '::'"),
+    ("package.json", "npm test --silent", None),
+    ("go.mod", "go test ./...", None),
+    ("Cargo.toml", "cargo test", None),
+)
 P_CTX = "context/activeContext.md"
 
 # Núcleo obrigatório do registro de archive. É o único contrato que a TCA
@@ -702,6 +720,51 @@ def _commits_por_ms(raiz: Path, desde: str | None) -> dict[str, list[dict]]:
     return por_ms
 
 
+def _ler_cfg(raiz: Path) -> dict:
+    f = raiz / P_PROJETO_CFG
+    return ler_json(f).get("comandos", {}) if f.exists() else {}
+
+
+def _rodar(raiz: Path, comando: str, timeout: int) -> tuple[int, str, float]:
+    """Executa um comando declarado pelo projeto e cronometra. Nunca infere comando."""
+    import subprocess
+    import time as _t
+    t0 = _t.monotonic()
+    try:
+        r = subprocess.run(comando, cwd=str(raiz), shell=True, capture_output=True,
+                           text=True, timeout=timeout)
+        return r.returncode, r.stdout, _t.monotonic() - t0
+    except subprocess.TimeoutExpired:
+        return 124, "", _t.monotonic() - t0
+
+
+def _medir_suite(raiz: Path, timeout: int) -> dict:
+    """Mede a suíte a partir do contrato declarado. Sem contrato, devolve lacuna."""
+    cmds = _ler_cfg(raiz)
+    alvo = cmds.get("testes")
+    if not alvo:
+        sugestoes = [(m, t, c) for m, t, c in DETECCAO if (raiz / m).exists()]
+        dica = f" Detectado {sugestoes[0][0]}; sugestão: {sugestoes[0][1]!r}." if sugestoes else ""
+        return {"_lacuna": f"{P_PROJETO_CFG} não declara comandos.testes.{dica}"}
+
+    cod, _saida, seg = _rodar(raiz, alvo, timeout)
+    medida = {
+        "suite_segundos": {"valor": round(seg, 1), "origem": "derivado:execucao",
+                           "comando": alvo, "resultado": "ok" if cod == 0 else f"exit {cod}"},
+    }
+    contar = cmds.get("contar_testes")
+    if contar:
+        c_cod, c_saida, _ = _rodar(raiz, contar, timeout)
+        texto = c_saida.strip().splitlines()[-1].strip() if c_saida.strip() else ""
+        if c_cod == 0 and texto.isdigit():
+            medida["suite_testes"] = {"valor": int(texto), "origem": "derivado:execucao",
+                                      "comando": contar}
+        else:
+            medida["suite_testes"] = {"valor": None, "origem": "lacuna",
+                                      "nota": "contar_testes não imprimiu somente um inteiro"}
+    return medida
+
+
 def cmd_metrics(args) -> int:
     """Linha de base do processo, derivada do que já aconteceu.
 
@@ -716,10 +779,10 @@ def cmd_metrics(args) -> int:
         raise TcaError(f"{raiz} não é um repositório git — sem histórico não há linha de base.")
 
     por_ms = _commits_por_ms(raiz, args.desde)
-    if not por_ms:
-        print("AVISO  nenhum commit cita MS-NNN no assunto — sem linha de base derivável.")
-        print("       A convenção Conventional Commits com MS-ID é o que torna isto mensurável.")
-        return 0
+    sem_historico = not por_ms
+    if sem_historico:
+        print("AVISO  nenhum commit cita MS-NNN no assunto — indicadores de MS não deriváveis.")
+        print("       A convenção Conventional Commits com MS-ID é o que os torna mensuráveis.")
 
     def _quando(c):
         return _dt.fromisoformat(c["data"])
@@ -748,6 +811,7 @@ def cmd_metrics(args) -> int:
     fechamentos.sort()
     lead_times = [(fechamentos[i + 1][0] - fechamentos[i][0]).total_seconds() / 3600
                   for i in range(len(fechamentos) - 1)]
+    n_ms = len(por_ms)
 
     # testes por MS: só o campo canônico. Histórico legado não é remapeado por
     # inferência — a cobertura do campo é reportada como está.
@@ -771,17 +835,13 @@ def cmd_metrics(args) -> int:
         return {"valor": valor, "origem": origem, **extra}
 
     datas = sorted(c["data"] for cs in por_ms.values() for c in cs)
-    registro = {
-        "ts": agora(),
-        "repo": raiz.name,
-        "ref": _git(raiz, "rev-parse", "HEAD") or "desconhecida",
-        "tca_versao": versao_pacote(),
-        "janela": {"desde": datas[0][:10], "ate": datas[-1][:10]},
-        "indicadores": {
-            "ms_entregues": ind(len(por_ms), "derivado:git"),
+    indicadores = {}
+    if not sem_historico:
+        indicadores = {
+            "ms_entregues": ind(n_ms, "derivado:git"),
             "ms_com_archive_pct": ind(
-                round(100 * ms_com_archive / len(por_ms), 1), "derivado:git+archives",
-                nota=f"{ms_com_archive}/{len(por_ms)} — gap documental"),
+                round(100 * ms_com_archive / n_ms, 1), "derivado:git+archives",
+                nota=f"{ms_com_archive}/{n_ms} — gap documental"),
             "commits_por_ms_mediana": ind(_mediana(commits_por), "derivado:git"),
             "arquivos_por_ms_mediana": ind(_mediana(arquivos_por), "derivado:git"),
             "linhas_por_ms_mediana": ind(_mediana(linhas_por), "derivado:git"),
@@ -792,22 +852,54 @@ def cmd_metrics(args) -> int:
                                           nota="proxy de retrabalho"),
             "testes_por_ms_mediana": ind(_mediana(testes), "derivado:archives",
                                          cobertura=f"{com_campo}/{len(archives)}"),
-        },
+        }
+    registro = {
+        "ts": agora(),
+        "repo": raiz.name,
+        "ref": _git(raiz, "rev-parse", "HEAD") or "desconhecida",
+        "tca_versao": versao_pacote(),
+        "janela": {"desde": datas[0][:10] if datas else None,
+                   "ate": datas[-1][:10] if datas else None},
+        "indicadores": indicadores,
         "nao_instrumentado": [
             "token_por_ms — o harness não expõe consumo ao processo",
-            "suite_segundos — depende do runner do projeto; informe com --suite-segundos",
             "ms_estacionadas e tempo_de_fila — exige a triagem em classes, que ainda não existe",
         ],
     }
     if args.suite_segundos is not None:
         registro["indicadores"]["suite_segundos"] = ind(args.suite_segundos, "reportado")
 
-    print(f"       repositório {raiz.name} · janela {registro['janela']['desde']} → {registro['janela']['ate']}")
+    if args.suite_segundos is None and not args.medir_suite:
+        registro["nao_instrumentado"].insert(
+            1, f"suite_segundos — declare comandos.testes em {P_PROJETO_CFG} e use --medir-suite")
+
+    if args.medir_suite:
+        medida = _medir_suite(raiz, args.timeout)
+        if "_lacuna" in medida:
+            registro["nao_instrumentado"].append(medida["_lacuna"])
+        else:
+            registro["indicadores"].update(medida)
+
+    jan = registro["janela"]
+    janela_txt = f"janela {jan['desde']} → {jan['ate']}" if jan["desde"] else "sem janela de MS"
+    print(f"       repositório {raiz.name} · {janela_txt}")
     for nome, d in registro["indicadores"].items():
         v = d["valor"]
         v = "—" if v is None else (f"{v:.1f}" if isinstance(v, float) else str(v))
         extra = f"  [{d.get('cobertura') or d.get('nota') or d['origem']}]"
         print(f"       {nome:38} {v:>9}{extra}")
+    if args.detectar:
+        print("       detecção — sugestões para declarar, nunca executadas sozinhas:")
+        achou = False
+        for marcador, testes, contar in DETECCAO:
+            if (raiz / marcador).exists():
+                achou = True
+                print(f"         · {marcador}: comandos.testes = {testes!r}")
+                if contar:
+                    print(f"           {' ' * len(marcador)}  comandos.contar_testes = {contar!r}")
+        if not achou:
+            print("         · nenhum marcador conhecido — declare manualmente")
+
     print("       não instrumentado:")
     for n in registro["nao_instrumentado"]:
         print(f"         · {n}")
@@ -817,7 +909,7 @@ def cmd_metrics(args) -> int:
         destino.parent.mkdir(parents=True, exist_ok=True)
         with destino.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(registro, ensure_ascii=False) + "\n")
-        registrar_execucao(raiz, "metrics", "ok", {"ms": len(por_ms)})
+        registrar_execucao(raiz, "metrics", "ok", {"ms": n_ms})
         print(f"OK     linha de base gravada em {P_METRICAS}")
     else:
         print("OK     modo relatório — nada foi escrito. Use --write para fixar a linha de base.")
@@ -944,6 +1036,12 @@ def main(argv=None) -> int:
     m.add_argument("--desde", help="ref git inicial da janela (padrão: todo o histórico)")
     m.add_argument("--suite-segundos", type=int, dest="suite_segundos",
                    help="tempo da suíte completa, em segundos — valor reportado")
+    m.add_argument("--medir-suite", action="store_true", dest="medir_suite",
+                   help=f"executa e cronometra o comando declarado em {P_PROJETO_CFG}")
+    m.add_argument("--timeout", type=int, default=1800,
+                   help="limite em segundos para a suíte (padrão 1800)")
+    m.add_argument("--detectar", action="store_true",
+                   help="sugere comandos a declarar, sem executar nenhum")
     m.add_argument("--write", action="store_true", help="grava a linha de base")
     m.set_defaults(fn=cmd_metrics)
 
