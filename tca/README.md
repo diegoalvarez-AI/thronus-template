@@ -127,6 +127,39 @@ teste e lista os que não têm; `--strict` reprova nesse caso. Sem o universo, a
 O pacote `tca/` fica fora da varredura. Ele documenta a convenção, e os exemplos entrariam
 no índice como se fossem cobertura real.
 
+### `tca sev [ID | --listar | --validar]`
+
+**Registro canônico de severidade.** Para cada violação revisável, o nível e a **origem da
+regra** ficam fixados em `tca/severidades.json` — que entra no `CANON.sha256`, porque
+alterá-lo muda o resultado que o método produz.
+
+Existe porque severidade decidida no momento do portão é julgamento, e julgamento carrega
+o viés de quem conduz a avaliação — que o ÂNCORA §2.4 quer restringir, e que é mais forte
+quando quem avalia tem interesse na aprovação.
+
+`--validar` confere a boa-formação e reporta quantas linhas têm detecção automática e
+quantas dependem de revisor humano. É um número útil por si: mede o quanto do método já
+executa sozinho.
+
+### `tca gate --achados ID,... [--pendencia ID=Nome]`
+
+Calcula o estado do portão sob **não compensação**, nos três estados do ÂNCORA:
+
+| Estado | Quando |
+|---|---|
+| `ATENDIDO` | nenhum bloqueante, nenhuma pendência sem dono |
+| `CONDICIONADO` | pendências residuais, **todas com responsável nomeado** |
+| `NAO_ATENDIDO` | qualquer bloqueante, ou pendência sem responsável |
+
+Três propriedades que, juntas, são a não compensação:
+
+1. **Bloqueante não é neutralizado.** Desempenho em outro critério não compensa condição
+   necessária.
+2. **Pendência sem responsável bloqueia.** Sem dono não é pendência acompanhada — é achado
+   não endereçado.
+3. **Achado fora do registro é erro**, não julgamento na hora. Declarar a linha é decisão
+   de método, tomada antes e por escrito.
+
 ### `tca selfcheck`
 
 **A verificação está de pé?** Responde ao incidente em que um estágio de integração

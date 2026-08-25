@@ -16,6 +16,8 @@ Comandos:
   tca verify [--strict]          coerência dos artefatos de controle
   tca diff [--cached]            snapshot-diff bidirecional contra a spec
   tca trace [--impacto A]        índice requisito ↔ teste ↔ commit
+  tca sev [ID | --listar]        registro canônico de severidade
+  tca gate --achados ID,...      estado do portão sob não compensação
   tca selfcheck                  a verificação está de pé?
   tca canon [--write]            integridade do conteúdo metodológico
   tca doctor [--strict]          divergência entre o projeto e o canon
@@ -117,7 +119,14 @@ CANON_GLOBS = (
     "docs/ThronusSpec/02_Setup/*.md",
     "profiles/*.json",
     "tca/METODOLOGIA.md",
+    "tca/severidades.json",
 )
+
+# Registro canônico de severidade. A severidade de uma violação é consulta, não
+# julgamento — critério avaliado por julgamento carrega o viés de quem conduz a
+# avaliação, que o ÂNCORA §2.4 quer restringir.
+SEVERIDADES = PKG_DIR / "severidades.json"
+NIVEIS = ("bloqueante", "residual", "informativo")
 
 # AGENTS.md é gerado: metodologia canônica + parte do projeto. Um harness sem
 # suporte a include precisa continuar lendo um arquivo só, então a concatenação
@@ -1293,6 +1302,131 @@ def cmd_trace(args) -> int:
     return 0
 
 
+def _ler_severidades() -> dict[str, dict]:
+    if not SEVERIDADES.exists():
+        raise TcaError(f"severidades.json ausente em {PKG_DIR}")
+    linhas = ler_json(SEVERIDADES).get("registro", [])
+    return {r["id"]: r for r in linhas}
+
+
+def cmd_sev(args) -> int:
+    """Consulta e validação do registro de severidade."""
+    reg = _ler_severidades()
+
+    if args.validar:
+        falhas = []
+        obrigatorios = ("id", "violacao", "criterio", "severidade", "origem", "detectado_por")
+        vistos = set()
+        for i, r in enumerate(ler_json(SEVERIDADES).get("registro", [])):
+            faltando = [c for c in obrigatorios if c not in r]
+            if faltando:
+                falhas.append(f"linha {i}: faltam {', '.join(faltando)}")
+                continue
+            if r["id"] in vistos:
+                falhas.append(f"{r['id']}: identificador duplicado")
+            vistos.add(r["id"])
+            if r["severidade"] not in NIVEIS:
+                falhas.append(f"{r['id']}: severidade {r['severidade']!r} fora de {NIVEIS}")
+            if not str(r["origem"]).strip():
+                falhas.append(f"{r['id']}: sem origem — severidade sem âncora é julgamento")
+        for f in falhas:
+            print(f"FALHA  {f}", file=sys.stderr)
+        auto = sum(1 for r in reg.values() if r.get("detectado_por"))
+        print(f"{'FALHA' if falhas else 'OK':<6} registro — {len(reg)} linhas · "
+              f"{auto} com detecção automática · {len(reg) - auto} dependem de revisor")
+        return 1 if falhas else 0
+
+    if args.id:
+        r = reg.get(args.id.upper())
+        if not r:
+            raise TcaError(f"{args.id} não consta no registro de severidade.")
+        print(f"       {r['id']}  {r['severidade'].upper()}")
+        print(f"       {r['violacao']}")
+        print(f"       critério  {r['criterio']}")
+        print(f"       origem    {r['origem']}")
+        print(f"       detecção  {r['detectado_por'] or 'revisor humano'}")
+        return 0
+
+    por_nivel: dict[str, list] = {n: [] for n in NIVEIS}
+    for r in reg.values():
+        por_nivel[r["severidade"]].append(r)
+    for nivel in NIVEIS:
+        itens = sorted(por_nivel[nivel], key=lambda r: r["id"])
+        if not itens:
+            continue
+        print(f"       ── {nivel.upper()} ({len(itens)})")
+        for r in itens:
+            marca = "auto" if r.get("detectado_por") else "  — "
+            print(f"       {r['id']}  [{marca}]  {r['violacao']}")
+    return 0
+
+
+def cmd_gate(args) -> int:
+    """Estado do portão sob a regra de não compensação.
+
+    Condição necessária insatisfeita produz sempre NÃO ATENDIDO — desempenho em
+    outro critério não compensa. Pendência residual só permite CONDICIONADO com
+    responsável nomeado; sem responsável ela não é pendência acompanhada, é
+    achado não endereçado, e bloqueia.
+    """
+    reg = _ler_severidades()
+    achados = [a.strip().upper() for a in (args.achados or "").split(",") if a.strip()]
+    pendencias = {}
+    for p in args.pendencia or []:
+        alvo, _, resp = p.partition("=")
+        if not resp.strip():
+            raise TcaError(f"pendência {p!r} sem responsável. Formato: SEV-020=Nome")
+        pendencias[alvo.strip().upper()] = resp.strip()
+
+    desconhecidos = [a for a in achados if a not in reg]
+    if desconhecidos:
+        raise TcaError(
+            f"achado fora do registro: {', '.join(desconhecidos)}.\n"
+            "Severidade não consta no registro canônico — declarar a linha é decisão "
+            "de método, não julgamento no momento do portão."
+        )
+
+    bloqueantes, residuais_ok, residuais_sem_dono, informativos = [], [], [], []
+    for a in achados:
+        nivel = reg[a]["severidade"]
+        if nivel == "bloqueante":
+            bloqueantes.append(a)
+        elif nivel == "residual":
+            (residuais_ok if a in pendencias else residuais_sem_dono).append(a)
+        else:
+            informativos.append(a)
+
+    if bloqueantes or residuais_sem_dono:
+        estado = "NAO_ATENDIDO"
+    elif residuais_ok:
+        estado = "CONDICIONADO"
+    else:
+        estado = "ATENDIDO"
+
+    for a in bloqueantes:
+        print(f"BLOQUEIA   {a}  {reg[a]['violacao']}")
+    for a in residuais_sem_dono:
+        print(f"BLOQUEIA   {a}  {reg[a]['violacao']}  (residual sem responsável nomeado)")
+    for a in residuais_ok:
+        print(f"PENDENTE   {a}  {reg[a]['violacao']}  → {pendencias[a]}")
+    for a in informativos:
+        print(f"NOTA       {a}  {reg[a]['violacao']}")
+
+    try:
+        raiz = achar_raiz(Path.cwd())
+        registrar_execucao(raiz, "gate", estado.lower(), {
+            "portao": args.portao, "achados": achados, "estado": estado,
+            "bloqueantes": len(bloqueantes), "residuais": len(residuais_ok)})
+    except TcaError:
+        pass
+
+    rotulo = {"ATENDIDO": "OK", "CONDICIONADO": "COND", "NAO_ATENDIDO": "FALHA"}[estado]
+    print(f"{rotulo:<6} portão {args.portao or '—'} · {estado} — "
+          f"{len(bloqueantes)} bloqueantes · {len(residuais_ok)} pendências acompanhadas · "
+          f"{len(informativos)} notas")
+    return 0 if estado != "NAO_ATENDIDO" else 1
+
+
 def cmd_metrics(args) -> int:
     """Linha de base do processo, derivada do que já aconteceu.
 
@@ -1692,6 +1826,19 @@ def main(argv=None) -> int:
     df.add_argument("--cached", action="store_true",
                     help="compara só o que está em staging (uso no portão de commit)")
     df.set_defaults(fn=cmd_diff)
+
+    sv = sub.add_parser("sev", help="registro canônico de severidade")
+    sv.add_argument("id", nargs="?", help="identificador a consultar")
+    sv.add_argument("--listar", action="store_true", help="lista o registro por severidade")
+    sv.add_argument("--validar", action="store_true", help="confere a boa-formação do registro")
+    sv.set_defaults(fn=cmd_sev)
+
+    gt = sub.add_parser("gate", help="estado do portão sob não compensação")
+    gt.add_argument("--portao", help="nome do portão avaliado")
+    gt.add_argument("--achados", help="identificadores separados por vírgula")
+    gt.add_argument("--pendencia", action="append",
+                    help="SEV-NNN=Responsável — nomeia o dono de uma pendência residual")
+    gt.set_defaults(fn=cmd_gate)
 
     tr = sub.add_parser("trace", help="índice requisito ↔ teste ↔ commit")
     tr.add_argument("--write", action="store_true", help="grava o índice")

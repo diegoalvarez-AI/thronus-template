@@ -1,0 +1,235 @@
+{
+  "_nota": "Registro canônico de severidade. Conteúdo metodológico: alterá-lo muda o resultado que o método produz, e por isso entra no CANON.sha256.",
+  "_porque": "A severidade de uma violação é consulta, não julgamento. Critério avaliado por julgamento carrega o viés de quem conduz a avaliação — que o ÂNCORA §2.4 quer restringir, e que é mais forte ainda quando quem avalia tem interesse na aprovação.",
+  "_severidades": {
+    "bloqueante": "Condição necessária. Não admite compensação por desempenho em outro critério. Portão fica NÃO ATENDIDO.",
+    "residual": "Pendência residual. Permite portão CONDICIONADO apenas com responsável nomeado; sem responsável, bloqueia.",
+    "informativo": "Registrado, não afeta o estado do portão."
+  },
+  "registro": [
+    {
+      "id": "SEV-001",
+      "violacao": "Portão declarado sem registro de execução",
+      "criterio": "portao-operante",
+      "severidade": "bloqueante",
+      "origem": "ÂNCORA Quadro 5 — invariante 'portão executado'",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-002",
+      "violacao": "Conteúdo metodológico sem âncora em fonte canônica",
+      "criterio": "proveniencia",
+      "severidade": "bloqueante",
+      "origem": "ÂNCORA §2.6 — exigência de proveniência",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-003",
+      "violacao": "Canon divergente do fixado no lock",
+      "criterio": "proveniencia",
+      "severidade": "bloqueante",
+      "origem": "ÂNCORA §2.6 — verificação de integridade",
+      "detectado_por": "tca doctor"
+    },
+    {
+      "id": "SEV-004",
+      "violacao": "Metodologia do projeto divergente do canon, sem override declarado",
+      "criterio": "proveniencia",
+      "severidade": "bloqueante",
+      "origem": "ÂNCORA Quadro 5 — ausência explícita",
+      "detectado_por": "tca doctor --strict"
+    },
+    {
+      "id": "SEV-005",
+      "violacao": "Override sem responsável nomeado",
+      "criterio": "responsabilidade",
+      "severidade": "bloqueante",
+      "origem": "ÂNCORA Quadro 1 — responsabilidade nomeada; papel genérico não satisfaz",
+      "detectado_por": "tca doctor"
+    },
+    {
+      "id": "SEV-006",
+      "violacao": "Conteúdo gerado editado à mão ou desatualizado em relação às fontes",
+      "criterio": "estado-derivado",
+      "severidade": "bloqueante",
+      "origem": "METODOLOGIA §7 — conteúdo gerado não se edita",
+      "detectado_por": "tca agents · tca manifest"
+    },
+    {
+      "id": "SEV-007",
+      "violacao": "Arquivo previsto na spec e não entregue",
+      "criterio": "snapshot-diff",
+      "severidade": "bloqueante",
+      "origem": "Levantamento de cobertura §7.2 — portões unidirecionais",
+      "detectado_por": "tca diff"
+    },
+    {
+      "id": "SEV-008",
+      "violacao": "Arquivo tocado fora do escopo declarado na spec",
+      "criterio": "snapshot-diff",
+      "severidade": "bloqueante",
+      "origem": "evaluatePlanIntegritySkill critério E — snapshot-diff pré-código",
+      "detectado_por": "tca diff"
+    },
+    {
+      "id": "SEV-009",
+      "violacao": "Campo de arquivos previstos ausente na spec",
+      "criterio": "snapshot-diff",
+      "severidade": "bloqueante",
+      "origem": "ÂNCORA Quadro 5 — ausência explícita não produz valor padrão",
+      "detectado_por": "tca diff"
+    },
+    {
+      "id": "SEV-010",
+      "violacao": "Contagem de testes caiu sem justificativa",
+      "criterio": "pipeline-de-pe",
+      "severidade": "bloqueante",
+      "origem": "Levantamento §7.3 — nada valida o ambiente onde a verificação acontece",
+      "detectado_por": "tca selfcheck"
+    },
+    {
+      "id": "SEV-011",
+      "violacao": "Última execução registrada da suíte terminou em erro",
+      "criterio": "pipeline-de-pe",
+      "severidade": "bloqueante",
+      "origem": "Levantamento §6 — CI sem banco por dias",
+      "detectado_por": "tca selfcheck"
+    },
+    {
+      "id": "SEV-012",
+      "violacao": "Projeto não declara contrato de execução dos testes",
+      "criterio": "pipeline-de-pe",
+      "severidade": "bloqueante",
+      "origem": "Levantamento §7.3 — suíte que não executa é indistinguível de suíte que passa",
+      "detectado_por": "tca selfcheck"
+    },
+    {
+      "id": "SEV-013",
+      "violacao": "Ciclo fechado sem atualizar os artefatos de controle",
+      "criterio": "fechamento",
+      "severidade": "bloqueante",
+      "origem": "Gap documental medido: 37,5% de cobertura de archive na linha de base",
+      "detectado_por": "tca verify · hook commit-msg"
+    },
+    {
+      "id": "SEV-014",
+      "violacao": "Requisito sem nenhum teste que o referencie",
+      "criterio": "rastreabilidade",
+      "severidade": "bloqueante",
+      "origem": "E4 — cobertura de requisito no lugar de percentual de linha",
+      "detectado_por": "tca trace --strict"
+    },
+    {
+      "id": "SEV-015",
+      "violacao": "Serviço de aplicação importa camada de infraestrutura",
+      "criterio": "isolamento-de-camadas",
+      "severidade": "bloqueante",
+      "origem": "METODOLOGIA §7 — invariante Port/Adapter",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-016",
+      "violacao": "Camada de domínio importa framework",
+      "criterio": "isolamento-de-camadas",
+      "severidade": "bloqueante",
+      "origem": "evaluatePlanIntegritySkill critério D",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-017",
+      "violacao": "Teste que depende de infraestrutura fora da camada de integração",
+      "criterio": "isolamento-de-camadas",
+      "severidade": "bloqueante",
+      "origem": "Revelado no thronus-os: sete arquivos tocam banco fora de integration",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-018",
+      "violacao": "Operação irreversível sem confirmação humana explícita",
+      "criterio": "reversibilidade",
+      "severidade": "bloqueante",
+      "origem": "profiles/agentes.json — invariante crítico",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-019",
+      "violacao": "Operação destrutiva controlada por configuração em vez de marcador de execução única",
+      "criterio": "reversibilidade",
+      "severidade": "bloqueante",
+      "origem": "ÂNCORA Quadro 5 — ação destrutiva",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-020",
+      "violacao": "Migração sem procedimento de reversão testado",
+      "criterio": "reversibilidade",
+      "severidade": "residual",
+      "origem": "Prática do QualiEdu: ciclo makemigrations → migrate → rollback → reapply",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-021",
+      "violacao": "Cenário BDD sem estratégia técnica correspondente no plano",
+      "criterio": "aderencia-bdd",
+      "severidade": "bloqueante",
+      "origem": "evaluatePlanIntegritySkill critério A",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-022",
+      "violacao": "Reescrita de contrato estável em vez de extensão",
+      "criterio": "conformidade-de-legado",
+      "severidade": "bloqueante",
+      "origem": "evaluatePlanIntegritySkill critério C",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-023",
+      "violacao": "Coleção de alta volumetria sem índice ou constraint de unicidade",
+      "criterio": "blindagem-de-infraestrutura",
+      "severidade": "residual",
+      "origem": "evaluatePlanIntegritySkill critério B",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-024",
+      "violacao": "Commit fora do padrão Conventional Commits com MS-ID",
+      "criterio": "fechamento",
+      "severidade": "residual",
+      "origem": "METODOLOGIA §7 — invariante de commit",
+      "detectado_por": "governance.yml"
+    },
+    {
+      "id": "SEV-025",
+      "violacao": "Valor normativo ainda no padrão do perfil, nunca revisado",
+      "criterio": "proveniencia",
+      "severidade": "informativo",
+      "origem": "Proveniência por valor — impede padrão virar decisão fantasma",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-026",
+      "violacao": "Indicador não instrumentável no ambiente atual",
+      "criterio": "medicao",
+      "severidade": "informativo",
+      "origem": "ÂNCORA Quadro 1 — humildade epistêmica; lacuna declarada não é falha",
+      "detectado_por": "tca metrics"
+    },
+    {
+      "id": "SEV-027",
+      "violacao": "Micro Spec com escopo acima do limite do perfil",
+      "criterio": "proporcionalidade",
+      "severidade": "residual",
+      "origem": "Linha de base: mediana de 1053 linhas por MS",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-028",
+      "violacao": "Tempo da suíte acima do orçamento declarado",
+      "criterio": "medicao",
+      "severidade": "residual",
+      "origem": "Restrição de laço local: build lento retarda o desenvolvimento serial",
+      "detectado_por": "tca metrics --medir-suite"
+    }
+  ]
+}

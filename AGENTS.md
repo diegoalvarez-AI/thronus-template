@@ -171,6 +171,31 @@ mesmo grafo serve à análise de impacto e à seleção de teste — uma peça p
 autoritativa de requisitos, o índice diz o que os testes cobrem, não o que falta —
 e a diferença entre as duas coisas é registrada como lacuna, nunca como 100%.
 
+### Severidade e estado do portão
+
+A severidade de uma violação é **consulta, não julgamento**. O registro canônico em
+`tca/severidades.json` fixa, para cada violação revisável, o nível e a origem da regra —
+e entra no `CANON.sha256` porque alterá-lo muda o resultado que o método produz.
+
+Critério avaliado por julgamento carrega o viés de quem conduz a avaliação, que o ÂNCORA
+§2.4 quer restringir — e o viés é mais forte quando quem avalia tem interesse na aprovação.
+
+| Nível | Efeito no portão |
+|---|---|
+| `bloqueante` | Condição necessária. **Não admite compensação.** Portão fica NÃO ATENDIDO. |
+| `residual` | Pendência residual. Permite CONDICIONADO **apenas com responsável nomeado**. |
+| `informativo` | Registrado; não afeta o estado. |
+
+`tca gate --achados SEV-007,SEV-023 --pendencia SEV-023=Nome` calcula o estado. Três
+propriedades, que juntas são a não compensação:
+
+1. Bloqueante insatisfeito produz sempre NÃO ATENDIDO — desempenho em outro critério não
+   neutraliza.
+2. Pendência residual **sem responsável** não é pendência acompanhada: é achado não
+   endereçado, e bloqueia.
+3. Achado fora do registro é **erro**, não julgamento no momento do portão. Declarar a
+   linha é decisão de método, tomada antes e por escrito.
+
 ### Auto-verificação do pipeline
 
 `tca selfcheck` pergunta se a própria verificação está de pé: o contrato de execução

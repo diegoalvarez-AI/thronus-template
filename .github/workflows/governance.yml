@@ -92,6 +92,9 @@ jobs:
       - name: Índice de rastreabilidade
         run: ./tca/bin/tca trace
 
+      - name: Registro de severidade
+        run: ./tca/bin/tca sev --validar
+
       - name: Testes do pacote tca
         run: python3 tca/tests/test_tca.py
 

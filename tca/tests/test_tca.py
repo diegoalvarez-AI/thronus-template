@@ -348,6 +348,64 @@ class TestTrace(Base):
         self.assertEqual(tca.main(["trace", "--impacto", "src/turma.py"]), 0)
 
 
+class TestSeveridadeEGate(Base):
+    """Severidade é consulta, não julgamento. E a agregação é não compensatória."""
+
+    def test_registro_e_bem_formado(self):
+        self.assertEqual(tca.main(["sev", "--validar"]), 0)
+
+    def test_toda_linha_tem_ancora(self):
+        """Severidade sem origem é julgamento com aparência de regra."""
+        for r in tca._ler_severidades().values():
+            self.assertTrue(str(r["origem"]).strip(), f"{r['id']} sem origem")
+            self.assertIn(r["severidade"], tca.NIVEIS)
+
+    def test_consulta_por_id(self):
+        self.assertEqual(tca.main(["sev", "SEV-007"]), 0)
+        self.assertEqual(tca.main(["sev", "sev-007"]), 0, "consulta é insensível a caixa")
+
+    def test_id_inexistente_falha(self):
+        self.assertEqual(tca.main(["sev", "SEV-999"]), 2)
+
+    def test_sem_achado_o_portao_esta_atendido(self):
+        self.assertEqual(tca.main(["gate", "--portao", "PLAN"]), 0)
+
+    def test_informativo_nao_afeta_o_portao(self):
+        self.assertEqual(tca.main(["gate", "--achados", "SEV-025"]), 0)
+
+    def test_bloqueante_reprova(self):
+        self.assertEqual(tca.main(["gate", "--achados", "SEV-007"]), 1)
+
+    def test_nao_compensacao_bloqueante_nao_e_neutralizado(self):
+        """Desempenho em outro critério não compensa condição necessária."""
+        self.assertEqual(
+            tca.main(["gate", "--achados", "SEV-007,SEV-023,SEV-025",
+                      "--pendencia", "SEV-023=Diego"]), 1,
+            "pendência acompanhada e nota não neutralizam um bloqueante")
+
+    def test_residual_com_responsavel_condiciona(self):
+        self.assertEqual(
+            tca.main(["gate", "--achados", "SEV-023", "--pendencia", "SEV-023=Diego"]), 0)
+
+    def test_residual_sem_responsavel_bloqueia(self):
+        """Pendência sem dono não é pendência acompanhada — é achado não endereçado."""
+        self.assertEqual(tca.main(["gate", "--achados", "SEV-023"]), 1)
+
+    def test_pendencia_sem_nome_e_erro(self):
+        self.assertEqual(
+            tca.main(["gate", "--achados", "SEV-023", "--pendencia", "SEV-023="]), 2)
+
+    def test_achado_fora_do_registro_e_erro_nao_julgamento(self):
+        self.assertEqual(tca.main(["gate", "--achados", "SEV-999"]), 2,
+                         "severidade não consta: declarar a linha é decisão de método")
+
+    def test_gate_emite_evidencia(self):
+        tca.main(["gate", "--portao", "COMMIT", "--achados", "SEV-025"])
+        reg = json.loads((self.raiz / P_EXEC).read_text(encoding="utf-8").strip().splitlines()[-1])
+        self.assertEqual(reg["comando"], "gate")
+        self.assertEqual(reg["detalhes"]["estado"], "ATENDIDO")
+
+
 class TestVerify(Base):
     def test_detecta_ciclo_aberto_sem_registro(self):
         idx = self.indice()
