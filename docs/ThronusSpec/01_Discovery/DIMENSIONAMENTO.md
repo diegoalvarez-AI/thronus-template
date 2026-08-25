@@ -20,7 +20,29 @@ tamanho medido.
 
 ---
 
-## 2. Tamanho — COSMIC, ISO/IEC 19761
+## 1-A. Unidade por natureza de intervenção
+
+COSMIC mede software. O programa tem itens que não são software, e cada natureza tem a sua
+unidade — declarada em `INTERVENCOES.md`:
+
+| Natureza | Unidade |
+|---|---|
+| Eliminar atividade | atividades removidas |
+| Padronizar procedimento | procedimentos escritos × exceções tratadas |
+| Capacitar, mentorar, aculturar | turmas × comportamentos-alvo × prazo de reforço |
+| Integrar sistemas existentes | pares origem-destino × campos mapeados |
+| Automatizar rotina | rotinas × passos × pontos de decisão |
+| Assistente ou agente simples | intenções × canais |
+| Agente com autonomia | intenções × ferramentas × ações irreversíveis |
+| Orquestração | fluxos × sistemas coordenados × pontos de retomada |
+| Painel e indicador | indicadores × fontes distintas |
+| API e sistema sob medida | processos funcionais em CFP (§2) |
+
+A banda (§6) e o compromisso conservador valem para todas, sem exceção.
+
+---
+
+## 2. Tamanho de software — COSMIC, ISO/IEC 19761
 
 COSMIC mede tamanho funcional contando **movimentos de dado** nos processos funcionais
 modelados. Quatro tipos, um ponto (CFP) cada:

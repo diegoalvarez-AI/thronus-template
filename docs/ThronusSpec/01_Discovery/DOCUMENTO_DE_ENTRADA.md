@@ -1,6 +1,8 @@
 # Documento de Entrada — gabarito
 
-> Saída única do Discovery. Base da proposta comercial e insumo da execução.
+> Artefato dos itens do Programa que **viram software** — integração, automação, agente,
+> orquestração, painel, API, sistema. Um por item. Os demais itens têm o artefato da sua
+> natureza, em `INTERVENCOES.md`. A saída principal do Discovery é o `PROGRAMA.md`.
 > Estrutura na acepção da **ISO/IEC/IEEE 29148**: todo requisito é verificável e rastreável, e
 > requisito de qualidade é expresso na taxonomia da série 250xx.
 >
