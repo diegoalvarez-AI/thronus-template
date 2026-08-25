@@ -529,6 +529,16 @@ class TestMetrics(unittest.TestCase):
         self.assertIsNone(d["valor"])
         self.assertEqual(d["origem"], "lacuna")
 
+    def test_conta_testes_sem_rodar_a_suite(self):
+        (self.dir / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "testes": "python3 -c \"open('RODOU','w')\"",
+            "contar_testes": "python3 -c \"print(2855)\"",
+        }}), encoding="utf-8")
+        self.assertEqual(tca.main(["metrics", "--write", "--contar-testes"]), 0)
+        self.assertEqual(self._registro()["suite_testes"]["valor"], 2855)
+        self.assertFalse((self.dir / "RODOU").exists(), "contar não pode executar a suíte")
+        self.assertNotIn("suite_segundos", self._registro())
+
     def test_detectar_nao_executa(self):
         (self.dir / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
         (self.dir / "marcador").write_text("intacto", encoding="utf-8")

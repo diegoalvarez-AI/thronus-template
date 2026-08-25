@@ -207,6 +207,11 @@ mesmo que um derivado de 104 commits, e a saída diz qual é qual.
 formato adivinhado: sem ele, o número vira lacuna em vez de vir de parsing heurístico da
 saída de um runner.
 
+As duas medidas são independentes por um motivo prático: **contar é barato e não exige
+ambiente; medir exige o projeto inteiro de pé**. `--contar-testes` roda só a contagem —
+útil onde banco, fila ou serviços não estão disponíveis. `--medir-suite` executa a suíte
+e, se houver contrato de contagem, conta também.
+
 Sem `tca.project.json`, o comando **não adivinha** — registra a ausência como lacuna.
 `--detectar` sugere o que declarar com base nos arquivos presentes, e nunca executa nada
 por conta própria. Suíte que falha é registrada com o código de saída, porque tempo de

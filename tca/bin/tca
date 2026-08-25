@@ -738,31 +738,35 @@ def _rodar(raiz: Path, comando: str, timeout: int) -> tuple[int, str, float]:
         return 124, "", _t.monotonic() - t0
 
 
-def _medir_suite(raiz: Path, timeout: int) -> dict:
-    """Mede a suíte a partir do contrato declarado. Sem contrato, devolve lacuna."""
-    cmds = _ler_cfg(raiz)
-    alvo = cmds.get("testes")
-    if not alvo:
-        sugestoes = [(m, t, c) for m, t, c in DETECCAO if (raiz / m).exists()]
-        dica = f" Detectado {sugestoes[0][0]}; sugestão: {sugestoes[0][1]!r}." if sugestoes else ""
-        return {"_lacuna": f"{P_PROJETO_CFG} não declara comandos.testes.{dica}"}
+def _lacuna_cfg(raiz: Path, chave: str) -> dict:
+    sugestoes = [(m, t, c) for m, t, c in DETECCAO if (raiz / m).exists()]
+    dica = f" Detectado {sugestoes[0][0]}; sugestão: {sugestoes[0][1]!r}." if sugestoes else ""
+    return {"_lacuna": f"{P_PROJETO_CFG} não declara comandos.{chave}.{dica}"}
 
+
+def _contar_testes(raiz: Path, timeout: int) -> dict:
+    """Conta os testes. Não roda a suíte — contar é barato e não precisa de ambiente."""
+    contar = _ler_cfg(raiz).get("contar_testes")
+    if not contar:
+        return _lacuna_cfg(raiz, "contar_testes")
+    cod, saida, _ = _rodar(raiz, contar, timeout)
+    texto = saida.strip().splitlines()[-1].strip() if saida.strip() else ""
+    if cod == 0 and texto.isdigit():
+        return {"suite_testes": {"valor": int(texto), "origem": "derivado:execucao",
+                                 "comando": contar}}
+    return {"suite_testes": {"valor": None, "origem": "lacuna",
+                             "nota": "contar_testes não imprimiu somente um inteiro"}}
+
+
+def _medir_suite(raiz: Path, timeout: int) -> dict:
+    """Executa e cronometra a suíte. Exige o ambiente completo do projeto."""
+    alvo = _ler_cfg(raiz).get("testes")
+    if not alvo:
+        return _lacuna_cfg(raiz, "testes")
     cod, _saida, seg = _rodar(raiz, alvo, timeout)
-    medida = {
-        "suite_segundos": {"valor": round(seg, 1), "origem": "derivado:execucao",
-                           "comando": alvo, "resultado": "ok" if cod == 0 else f"exit {cod}"},
-    }
-    contar = cmds.get("contar_testes")
-    if contar:
-        c_cod, c_saida, _ = _rodar(raiz, contar, timeout)
-        texto = c_saida.strip().splitlines()[-1].strip() if c_saida.strip() else ""
-        if c_cod == 0 and texto.isdigit():
-            medida["suite_testes"] = {"valor": int(texto), "origem": "derivado:execucao",
-                                      "comando": contar}
-        else:
-            medida["suite_testes"] = {"valor": None, "origem": "lacuna",
-                                      "nota": "contar_testes não imprimiu somente um inteiro"}
-    return medida
+    return {"suite_segundos": {"valor": round(seg, 1), "origem": "derivado:execucao",
+                               "comando": alvo,
+                               "resultado": "ok" if cod == 0 else f"exit {cod}"}}
 
 
 def cmd_metrics(args) -> int:
@@ -873,8 +877,11 @@ def cmd_metrics(args) -> int:
         registro["nao_instrumentado"].insert(
             1, f"suite_segundos — declare comandos.testes em {P_PROJETO_CFG} e use --medir-suite")
 
-    if args.medir_suite:
-        medida = _medir_suite(raiz, args.timeout)
+    for ativo, fn in ((args.medir_suite, _medir_suite),
+                      (args.medir_suite or args.contar_testes, _contar_testes)):
+        if not ativo:
+            continue
+        medida = fn(raiz, args.timeout)
         if "_lacuna" in medida:
             registro["nao_instrumentado"].append(medida["_lacuna"])
         else:
@@ -1037,7 +1044,9 @@ def main(argv=None) -> int:
     m.add_argument("--suite-segundos", type=int, dest="suite_segundos",
                    help="tempo da suíte completa, em segundos — valor reportado")
     m.add_argument("--medir-suite", action="store_true", dest="medir_suite",
-                   help=f"executa e cronometra o comando declarado em {P_PROJETO_CFG}")
+                   help=f"executa e cronometra a suíte declarada em {P_PROJETO_CFG}")
+    m.add_argument("--contar-testes", action="store_true", dest="contar_testes",
+                   help="conta os testes sem executar a suíte — não exige ambiente")
     m.add_argument("--timeout", type=int, default=1800,
                    help="limite em segundos para a suíte (padrão 1800)")
     m.add_argument("--detectar", action="store_true",
