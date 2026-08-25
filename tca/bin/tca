@@ -19,6 +19,7 @@ Comandos:
   tca trace [--impacto A]        índice requisito ↔ teste ↔ commit
   tca sev [ID | --listar]        registro canônico de severidade
   tca gate [--classe C] [--assinar N]   estado do portão sob não compensação
+  tca produto [--verificar]      obrigações do produto para o perfil ativo
   tca selfcheck                  a verificação está de pé?
   tca canon [--write]            integridade do conteúdo metodológico
   tca doctor [--strict]          divergência entre o projeto e o canon
@@ -129,6 +130,7 @@ CANON_GLOBS = (
     "docs/ThronusSpec/02_Setup/*.md",
     "profiles/*.json",
     "tca/METODOLOGIA.md",
+    "tca/ARQUITETURA.md",
     "tca/severidades.json",
 )
 
@@ -616,6 +618,19 @@ def cmd_close_ms(args) -> int:
     return 0
 
 
+def _perfil_exige_fundacao(raiz: Path, estado: dict) -> bool:
+    perfil = estado.get("perfil")
+    if not perfil or str(perfil).startswith("{{"):
+        return False
+    pf = raiz / "profiles" / f"{perfil}.json"
+    if not pf.is_file():
+        return False
+    try:
+        return bool(ler_json(pf).get("requisitos_do_produto"))
+    except TcaError:
+        return False
+
+
 def cmd_verify(args) -> int:
     raiz = achar_raiz(Path.cwd())
     falhas: list[str] = []
@@ -684,7 +699,22 @@ def cmd_verify(args) -> int:
         except TcaError as e:
             falhas.append(str(e))
 
-    # 7. campos não deriváveis — lacuna declarada, não falha
+    # 7. MS-000 Fundação precede qualquer funcionalidade.
+    #
+    # A regra só vale onde o perfil declara requisitos_do_produto: projeto
+    # criado antes desse contrato não é reprovado retroativamente por uma
+    # obrigação que não existia quando ele começou. Ao atualizar a TCA, o
+    # projeto adota o contrato e a regra passa a valer — que é o momento certo.
+    if keys_reais and "ms000" not in keys_reais and _perfil_exige_fundacao(raiz, estado):
+        _achado("SEV-036")
+        falhas.append(
+            f"{len(keys_reais)} Micro Spec(s) fechada(s) sem MS-000 Fundação. "
+            "O substrato do perfil (controle de acesso, camadas, observabilidade, "
+            "orçamento) é instalado antes da primeira funcionalidade — ver "
+            "tca/ARQUITETURA.md §10."
+        )
+
+    # 8. campos não deriváveis — lacuna declarada, não falha
     if "status_modulo_percentual" in estado:
         avisos.append(
             "status_modulo_percentual não é derivável: o schema não define campo de backlog. "
@@ -1543,7 +1573,7 @@ def cmd_gate(args) -> int:
         # Os defaults vêm do próprio parser: montá-los à mão duplicaria a
         # definição e quebraria a cada flag nova — foi o que aconteceu quando
         # `diff` ganhou --ms.
-        VERIFICACOES = ("diff", "trace", "selfcheck", "doctor")
+        VERIFICACOES = ("diff", "trace", "selfcheck", "doctor", "verify", "produto")
         for nome in [n.strip() for n in args.de.split(",") if n.strip()]:
             if nome not in VERIFICACOES:
                 raise TcaError(f"verificação desconhecida: {nome!r}. "
@@ -1811,6 +1841,85 @@ def _custo_fixo(raiz: Path, por_ms: dict, timeout: int) -> dict:
                     "spec, revisar, aprovar. Automatizar o fechamento não baixa "
                     "o piso da decomposição"}
     return saida
+
+
+def _achatar(prefixo: str, no) -> list[tuple[str, object]]:
+    if isinstance(no, dict):
+        saida = []
+        for k, v in no.items():
+            if k.startswith("_"):
+                continue
+            saida += _achatar(f"{prefixo}.{k}" if prefixo else k, v)
+        return saida
+    return [(prefixo, no)]
+
+
+def cmd_produto(args) -> int:
+    """Obrigações do produto para o perfil ativo, e o estado de cada uma.
+
+    O perfil declara O QUE o produto precisa ter; o projeto declara COMO se
+    verifica, em `tca.project.json → verificacoes`. A TCA não sabe medir p95
+    nem provar isolamento de linha em stack nenhuma — e adivinhar seria a
+    inferência que o método proíbe.
+    """
+    raiz = achar_raiz(Path.cwd())
+    indice = ler_json(raiz / P_INDEX)
+    perfil = indice.get("estado_da_trilha", {}).get("perfil")
+    if not perfil or perfil.startswith("{{"):
+        raise TcaError("perfil não definido em estado_da_trilha.perfil")
+    pf = raiz / "profiles" / f"{perfil}.json"
+    if not pf.exists():
+        raise TcaError(f"profiles/{perfil}.json não existe")
+    req = ler_json(pf).get("requisitos_do_produto")
+    if not req:
+        raise TcaError(f"perfil {perfil} não declara requisitos_do_produto")
+
+    verif = ler_json(raiz / P_PROJETO_CFG).get("verificacoes", {}) \
+        if (raiz / P_PROJETO_CFG).exists() else {}
+
+    obrigacoes = [(k, v) for k, v in _achatar("", req) if v not in (False, None)]
+    print(f"       perfil {perfil} · {len(obrigacoes)} obrigações aplicáveis")
+
+    verificadas, sem_contrato, falhas = [], [], []
+    for chave, valor in sorted(obrigacoes):
+        cmd = verif.get(chave)
+        alvo = "" if valor is True else f" = {valor}"
+        if not cmd:
+            sem_contrato.append(chave)
+            if args.verificar:
+                print(f"SEM CONTRATO {chave}{alvo}")
+            continue
+        if not args.verificar:
+            verificadas.append(chave)
+            continue
+        cod, _saida, _t = _rodar(raiz, cmd, args.timeout)
+        if cod == 0:
+            verificadas.append(chave)
+            print(f"OK           {chave}{alvo}")
+        else:
+            falhas.append(chave)
+            print(f"FALHA        {chave}{alvo}  (exit {cod})")
+
+    if not args.verificar:
+        for c in sorted(sem_contrato):
+            print(f"       — {c}  sem verificação declarada")
+        for c in sorted(verificadas):
+            print(f"       ✓ {c}  → {verif[c]}")
+
+    if sem_contrato:
+        _achado("SEV-034")
+    if falhas:
+        _achado("SEV-035")
+
+    registrar_execucao(raiz, "produto", "falha" if falhas else "ok", {
+        "perfil": perfil, "obrigacoes": len(obrigacoes),
+        "com_contrato": len(obrigacoes) - len(sem_contrato),
+        "falhas": len(falhas), "verificado": bool(args.verificar)})
+
+    estado = "FALHA" if falhas else "OK"
+    print(f"{estado:<6} produto — {len(obrigacoes) - len(sem_contrato)}/{len(obrigacoes)} "
+          f"com verificação declarada · {len(falhas)} falhando")
+    return 1 if falhas else 0
 
 
 def cmd_metrics(args) -> int:
@@ -2256,6 +2365,12 @@ def _parser() -> argparse.ArgumentParser:
     gt.add_argument("--pendencia", action="append",
                     help="SEV-NNN=Responsável — nomeia o dono de uma pendência residual")
     gt.set_defaults(fn=cmd_gate)
+
+    pr = sub.add_parser("produto", help="obrigações do produto para o perfil ativo")
+    pr.add_argument("--verificar", action="store_true",
+                    help="executa as verificações declaradas em tca.project.json")
+    pr.add_argument("--timeout", type=int, default=1800, help="limite por verificação")
+    pr.set_defaults(fn=cmd_produto)
 
     tr = sub.add_parser("trace", help="índice requisito ↔ teste ↔ commit")
     tr.add_argument("--write", action="store_true", help="grava o índice")

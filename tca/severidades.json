@@ -270,6 +270,30 @@
       "severidade": "bloqueante",
       "origem": "Autorização é decisão tomada antes; autodesignação no momento da aprovação é o viés que o ÂNCORA §2.4 restringe",
       "detectado_por": "tca gate --assinar"
+    },
+    {
+      "id": "SEV-034",
+      "violacao": "Obrigação do produto sem verificação declarada",
+      "criterio": "produto",
+      "severidade": "residual",
+      "origem": "ARQUITETURA §10 — obrigação sem verificação é intenção; com dono e prazo, é pendência",
+      "detectado_por": "tca produto"
+    },
+    {
+      "id": "SEV-035",
+      "violacao": "Obrigação do produto verificada e reprovando",
+      "criterio": "produto",
+      "severidade": "bloqueante",
+      "origem": "ARQUITETURA — o produto não entrega sem as propriedades do perfil",
+      "detectado_por": "tca produto --verificar"
+    },
+    {
+      "id": "SEV-036",
+      "violacao": "Funcionalidade construída sobre substrato ausente",
+      "criterio": "produto",
+      "severidade": "bloqueante",
+      "origem": "ARQUITETURA §10 — MS-000 Fundação antes da primeira funcionalidade",
+      "detectado_por": "tca verify"
     }
   ],
   "_classes": {

@@ -9,15 +9,38 @@
     "resumidor de atendimentos com sugestão de próximos passos"
   ],
   "fases": {
-    "discovery":             { "status": "obrigatoria", "nota": "mapear fluxos conversacionais e pontos de escalonamento humano" },
-    "functional_modeling":   { "status": "obrigatoria-adaptada", "nota": "modelar intenções, entidades, regras de negócio e critérios de escalonamento" },
-    "architecture":          { "status": "obrigatoria", "nota": "decisão de modelo LLM, plataforma de orquestração e canais de integração" },
-    "spec":                  { "status": "obrigatoria" },
-    "plan":                  { "status": "obrigatoria" },
-    "red":                   { "status": "obrigatoria-adaptada", "nota": "testes de fluxo conversacional e avaliação de resposta LLM" },
-    "green":                 { "status": "obrigatoria" },
-    "edge":                  { "status": "obrigatoria", "nota": "testes de alucinação, inputs ambíguos, inputs maliciosos, falha de canal" },
-    "commit":                { "status": "obrigatoria" }
+    "discovery": {
+      "status": "obrigatoria",
+      "nota": "mapear fluxos conversacionais e pontos de escalonamento humano"
+    },
+    "functional_modeling": {
+      "status": "obrigatoria-adaptada",
+      "nota": "modelar intenções, entidades, regras de negócio e critérios de escalonamento"
+    },
+    "architecture": {
+      "status": "obrigatoria",
+      "nota": "decisão de modelo LLM, plataforma de orquestração e canais de integração"
+    },
+    "spec": {
+      "status": "obrigatoria"
+    },
+    "plan": {
+      "status": "obrigatoria"
+    },
+    "red": {
+      "status": "obrigatoria-adaptada",
+      "nota": "testes de fluxo conversacional e avaliação de resposta LLM"
+    },
+    "green": {
+      "status": "obrigatoria"
+    },
+    "edge": {
+      "status": "obrigatoria",
+      "nota": "testes de alucinação, inputs ambíguos, inputs maliciosos, falha de canal"
+    },
+    "commit": {
+      "status": "obrigatoria"
+    }
   },
   "gates_intermediarios": [
     "GATE_FLUXO_CONVERSACIONAL_APROVADO — cliente valida o mapa de intenções e pontos de escalonamento",
@@ -45,5 +68,64 @@
     "Prompts são versionados no repositório; mudança de prompt = nova MS",
     "O agente nunca finge ser humano quando questionado diretamente"
   ],
-  "gate_encerramento": "validação em canal real com amostra de usuários reais por mínimo 48h antes do go-live completo"
+  "gate_encerramento": "validação em canal real com amostra de usuários reais por mínimo 48h antes do go-live completo",
+  "requisitos_do_produto": {
+    "_nota": "Agentes de IA. O teto de token deixa de ser economia e vira controle de disponibilidade.",
+    "controle_de_acesso": {
+      "rbac": true,
+      "isolamento_de_linha": true,
+      "teste_negativo_obrigatorio": true
+    },
+    "dependencia_externa": {
+      "timeout_obrigatorio": true,
+      "retry": true,
+      "circuit_breaker": true,
+      "teste_de_falha_de_dependencia": true,
+      "chave_de_idempotencia": true
+    },
+    "modelo_de_linguagem": {
+      "teto_por_operacao": true,
+      "teto_por_conversa": true,
+      "teto_diario": true,
+      "registro_de_custo": true,
+      "cache_de_prefixo": true,
+      "prompt_versionado_com_ancora": true,
+      "caminho_de_degradacao": true,
+      "nunca_acao_irreversivel_sem_confirmacao": true
+    },
+    "observabilidade": {
+      "log_estruturado": true,
+      "correlation_id": true,
+      "health": "liveness+readiness",
+      "ms_id_no_release": true,
+      "trilha_de_acesso_a_dado_pessoal": true
+    },
+    "desempenho": {
+      "contagem_de_queries_em_teste": true,
+      "paginacao_obrigatoria": true,
+      "p95_ms": {
+        "leitura_interativa": 1000,
+        "escrita": 2000,
+        "relatorio": 10000,
+        "lote": null
+      },
+      "carga_transferida_kb": 350
+    },
+    "escalabilidade": {
+      "trabalho_pesado_em_fila": true,
+      "teste_de_carga": false
+    },
+    "reversibilidade": {
+      "migracao_com_down_testado": true,
+      "marcador_execucao_unica": true,
+      "feature_flag_raio_alto": true
+    },
+    "camadas": {
+      "contrato_verificado_no_build": true
+    },
+    "interface": {
+      "sete_estados": true,
+      "acessibilidade": "WCAG 2.2 AA"
+    }
+  }
 }

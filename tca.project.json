@@ -2,5 +2,10 @@
   "comandos": {
     "testes": "python3 tca/tests/test_tca.py",
     "contar_testes": "python3 tca/tests/test_tca.py 2>&1 | sed -n 's/^Ran \\([0-9]*\\) tests.*/\\1/p'"
-  }
+  },
+  "verificacoes": {
+    "camadas.contrato_verificado_no_build": "python3 tca/bin/tca verify-self",
+    "reversibilidade.marcador_execucao_unica": "python3 tca/bin/tca manifest"
+  },
+  "_verificacoes": "chave = caminho da obrigação em profiles/<perfil>.json → requisitos_do_produto; valor = comando que sai 0 quando satisfeita. Ver tca/ARQUITETURA.md e `tca produto`."
 }

@@ -1,17 +1,58 @@
 {
   "perfil": "enterprise",
   "descricao": "Plataforma crítica, sistema legado com reescrita, contrato governamental de alta complexidade. 50+ Micro Specs. Entrega em trimestres.",
-  "exemplos": ["reescrita de sistema tributário", "plataforma de saúde com prontuário eletrônico", "sistema de gestão de contratos públicos de grande porte", "plataforma de ensino com BI integrado"],
+  "exemplos": [
+    "reescrita de sistema tributário",
+    "plataforma de saúde com prontuário eletrônico",
+    "sistema de gestão de contratos públicos de grande porte",
+    "plataforma de ensino com BI integrado"
+  ],
   "fases": {
-    "discovery":             { "status": "obrigatoria", "artefatos_adicionais": ["AS-IS vs TO-BE", "análise de impacto organizacional"] },
-    "functional_modeling":   { "status": "obrigatoria", "artefatos_adicionais": ["diagrama de contexto do sistema", "mapa de domínios (DDD bounded contexts)"] },
-    "architecture":          { "status": "obrigatoria", "artefatos_adicionais": ["múltiplos ADRs por decisão significativa", "análise de segurança (threat model)", "plano de migração se sistema legado"] },
-    "spec":                  { "status": "obrigatoria" },
-    "plan":                  { "status": "obrigatoria" },
-    "red":                   { "status": "obrigatoria" },
-    "green":                 { "status": "obrigatoria" },
-    "edge":                  { "status": "obrigatoria", "inclui": ["testes de carga", "testes de segurança OWASP", "teste de falha de dependência"] },
-    "commit":                { "status": "obrigatoria" }
+    "discovery": {
+      "status": "obrigatoria",
+      "artefatos_adicionais": [
+        "AS-IS vs TO-BE",
+        "análise de impacto organizacional"
+      ]
+    },
+    "functional_modeling": {
+      "status": "obrigatoria",
+      "artefatos_adicionais": [
+        "diagrama de contexto do sistema",
+        "mapa de domínios (DDD bounded contexts)"
+      ]
+    },
+    "architecture": {
+      "status": "obrigatoria",
+      "artefatos_adicionais": [
+        "múltiplos ADRs por decisão significativa",
+        "análise de segurança (threat model)",
+        "plano de migração se sistema legado"
+      ]
+    },
+    "spec": {
+      "status": "obrigatoria"
+    },
+    "plan": {
+      "status": "obrigatoria"
+    },
+    "red": {
+      "status": "obrigatoria"
+    },
+    "green": {
+      "status": "obrigatoria"
+    },
+    "edge": {
+      "status": "obrigatoria",
+      "inclui": [
+        "testes de carga",
+        "testes de segurança OWASP",
+        "teste de falha de dependência"
+      ]
+    },
+    "commit": {
+      "status": "obrigatoria"
+    }
   },
   "gates_intermediarios": [
     "GATE_DISCOVERY_APROVADO — aprovação formal por stakeholders identificados",
@@ -28,5 +69,76 @@
     "documentacao": "completa + manual operacional + manual do usuário + roteiros de QA",
     "cobertura_testes_minima": "90%"
   },
-  "gate_encerramento": "aceite formal documentado + treinamento dos usuários + SLA definido"
+  "gate_encerramento": "aceite formal documentado + treinamento dos usuários + SLA definido",
+  "requisitos_do_produto": {
+    "_nota": "Crítico, contrato público. Tudo do standard, com retenção e compliance.",
+    "controle_de_acesso": {
+      "rbac": true,
+      "isolamento_de_linha": true,
+      "teste_negativo_obrigatorio": true,
+      "concessao_de_papel_auditada": true,
+      "mfa": true
+    },
+    "dependencia_externa": {
+      "timeout_obrigatorio": true,
+      "retry": true,
+      "circuit_breaker": true,
+      "teste_de_falha_de_dependencia": true,
+      "chave_de_idempotencia": true,
+      "orcamento_de_chamadas": true
+    },
+    "modelo_de_linguagem": {
+      "teto_por_operacao": true,
+      "teto_diario": true,
+      "registro_de_custo": true,
+      "prompt_versionado_com_ancora": true
+    },
+    "observabilidade": {
+      "log_estruturado": true,
+      "correlation_id": true,
+      "health": "liveness+readiness",
+      "ms_id_no_release": true,
+      "metricas_taxa_erro_duracao": true,
+      "trilha_de_acesso_a_dado_pessoal": true,
+      "slo_declarado": "99.5%"
+    },
+    "desempenho": {
+      "contagem_de_queries_em_teste": true,
+      "paginacao_obrigatoria": true,
+      "cache_com_invalidacao_declarada": true,
+      "p95_ms": {
+        "leitura_interativa": 600,
+        "escrita": 1200,
+        "relatorio": 6000,
+        "lote": null
+      },
+      "carga_transferida_kb": 250
+    },
+    "escalabilidade": {
+      "trabalho_pesado_em_fila": true,
+      "teste_de_carga": true,
+      "pool_de_conexao": true,
+      "statement_timeout": true,
+      "ensaio_de_restauracao": true
+    },
+    "reversibilidade": {
+      "migracao_com_down_testado": true,
+      "marcador_execucao_unica": true,
+      "feature_flag_raio_alto": true
+    },
+    "camadas": {
+      "contrato_verificado_no_build": true
+    },
+    "interface": {
+      "sete_estados": true,
+      "acessibilidade": "WCAG 2.2 AA + eMAG",
+      "zero_mensagem_tecnica": true,
+      "orcamento_de_interacao": true
+    },
+    "dados": {
+      "classificacao_de_sensibilidade": true,
+      "retencao_declarada": true,
+      "expurgo_testado": true
+    }
+  }
 }

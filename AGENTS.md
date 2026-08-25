@@ -80,9 +80,10 @@ Toda solicitação de desenvolvimento deve acionar `docs/ThronusSpec/02_Setup/tc
 **Fases Pré-Código (independentes de tecnologia):**
 1. **[ESTADO_DISCOVERY]** → `discoverySkill.md` — Problema canônico, stakeholders, critérios de sucesso
 2. **[ESTADO_FUNCTIONAL]** → `functionalModelingSkill.md` — Glossário, entidades, casos de uso, backlog de MSs
-3. **[ESTADO_ARCHITECTURE]** → `architectureDecisionSkill.md` — ADR com score 4-dimensões, stack decidido por camada
+3. **[ESTADO_ARCHITECTURE]** → `architectureDecisionSkill.md` — ADR com score 4-dimensões, stack decidido por camada. **O ADR não fecha sem responder a cada obrigação aplicável de `tca/ARQUITETURA.md`** — a decisão registra como o produto satisfaz a obrigação, ou por que ela não se aplica.
+4. **[MS-000 Fundação]** — primeira Micro Spec de todo projeto, obrigatória. Sua especificação é derivada das obrigações aplicáveis ao perfil: instala o substrato (controle de acesso, contrato de camadas, observabilidade, orçamento) **antes da primeira funcionalidade**. Nenhuma funcionalidade é construída sobre substrato ausente.
 
-**Ciclo TDD (após decisão de arquitetura):**
+**Ciclo TDD (após a MS-000):**
 4. **[ESTADO_SPEC]** → `loadProjectPayloadSkill.md` — Carrega contexto e gera spec da MS ativa
 5. **[ESTADO_PLAN]** → `evaluatePlanIntegritySkill.md` (MAX 3 iter.) + **gate humano obrigatório (CAP-GATE)**
 6. **[ESTADO_RED]** → Testes BDD com falha limpa comprovada
@@ -92,6 +93,31 @@ Toda solicitação de desenvolvimento deve acionar `docs/ThronusSpec/02_Setup/tc
 
 Rollbacks: PLAN→SPEC, GREEN→PLAN, EDGE→GREEN, EDGE→PLAN, COMMIT→ABORT.
 Rollbacks pré-código: FUNCTIONAL→DISCOVERY, ARCHITECTURE→FUNCTIONAL.
+
+### Obrigações do produto
+
+`tca/ARQUITETURA.md` é conteúdo canônico: declara, de forma agnóstica de stack, o que **todo
+produto gerado pela TCA** precisa ter — controle de acesso em duas camadas, resiliência e
+economia na dependência externa, teto de token, observabilidade, desempenho por classe de
+operação, escalabilidade, reversibilidade, isolamento de camadas e estados de interface.
+
+A divisão de responsabilidade é fixa:
+
+| Artefato | Declara |
+|---|---|
+| `tca/ARQUITETURA.md` | **o que** todo produto precisa ter, como obrigação |
+| `profiles/<perfil>.json → requisitos_do_produto` | **quais** obrigações valem neste perfil e com **que limiar** |
+| `tca.project.json → verificacoes` | **como** este projeto verifica cada obrigação |
+| `tca produto [--verificar]` | **o estado** de cada obrigação, e o achado quando falha |
+
+Limiar de desempenho é declarado **por classe de operação** — leitura interativa, escrita,
+relatório, lote — e nunca como número único: limiar único produz exceção declarada em quase
+todo projeto, e exceção rotineira é o começo do portão que ninguém respeita.
+
+Obrigação sem verificação declarada é achado residual (SEV-034); obrigação verificada e
+reprovando é bloqueante (SEV-035). A verificação é do projeto porque a TCA não sabe medir p95
+nem provar isolamento de linha em stack nenhuma — e adivinhar seria a inferência que o método
+proíbe.
 
 ## 4. Retomada e Idempotência
 
@@ -273,6 +299,7 @@ Serviços de aplicação dependem de interfaces/contratos (em `application/ports
 - **EventoAuditoria (se aplicável)**: append-only — nunca modificar ou deletar registros existentes.
 - **Raiz agnóstica de stack**: nada específico de linguagem ou framework vive na raiz do template. Se for específico de stack, o lugar é `starters/<stack>/`.
 - **Independência de harness**: nenhum artefato cita ferramenta de harness pelo nome — apenas as capacidades do Contrato de Harness (seção 0).
+- **Substrato antes da funcionalidade**: as obrigações de `tca/ARQUITETURA.md` aplicáveis ao perfil são instaladas na MS-000, não acrescentadas depois. Acrescentar controle de acesso ou observabilidade depois de vinte Micro Specs é a refatoração cara que o método existe para evitar.
 - **Conteúdo gerado não se edita**: arquivo com marcador de geração é reescrito na próxima execução do comando que o produz.
 
 ## 8. Convenção de testes

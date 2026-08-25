@@ -1,17 +1,41 @@
 {
   "perfil": "standard",
   "descricao": "Aplicação de negócio, plataforma SaaS, sistema de gestão. 15–50 Micro Specs. Entrega em meses.",
-  "exemplos": ["sistema de gestão educacional", "plataforma de RH", "ERP setorial", "marketplace", "sistema de contratos públicos"],
+  "exemplos": [
+    "sistema de gestão educacional",
+    "plataforma de RH",
+    "ERP setorial",
+    "marketplace",
+    "sistema de contratos públicos"
+  ],
   "fases": {
-    "discovery":             { "status": "obrigatoria" },
-    "functional_modeling":   { "status": "obrigatoria" },
-    "architecture":          { "status": "obrigatoria" },
-    "spec":                  { "status": "obrigatoria" },
-    "plan":                  { "status": "obrigatoria" },
-    "red":                   { "status": "obrigatoria" },
-    "green":                 { "status": "obrigatoria" },
-    "edge":                  { "status": "obrigatoria" },
-    "commit":                { "status": "obrigatoria" }
+    "discovery": {
+      "status": "obrigatoria"
+    },
+    "functional_modeling": {
+      "status": "obrigatoria"
+    },
+    "architecture": {
+      "status": "obrigatoria"
+    },
+    "spec": {
+      "status": "obrigatoria"
+    },
+    "plan": {
+      "status": "obrigatoria"
+    },
+    "red": {
+      "status": "obrigatoria"
+    },
+    "green": {
+      "status": "obrigatoria"
+    },
+    "edge": {
+      "status": "obrigatoria"
+    },
+    "commit": {
+      "status": "obrigatoria"
+    }
   },
   "gates_intermediarios": [
     "GATE_DISCOVERY_APROVADO — cliente valida o enunciado do problema antes de modelar",
@@ -26,5 +50,68 @@
     "documentacao": "completa — todos os artefatos TCA",
     "cobertura_testes_minima": "85%"
   },
-  "gate_encerramento": "homologação formal + entrega de documentação operacional"
+  "gate_encerramento": "homologação formal + entrega de documentação operacional",
+  "requisitos_do_produto": {
+    "_nota": "Sistema de gestão, SaaS. Multi-tenant é o padrão: isolamento de linha obrigatório.",
+    "controle_de_acesso": {
+      "rbac": true,
+      "isolamento_de_linha": true,
+      "teste_negativo_obrigatorio": true,
+      "concessao_de_papel_auditada": true
+    },
+    "dependencia_externa": {
+      "timeout_obrigatorio": true,
+      "retry": true,
+      "circuit_breaker": true,
+      "teste_de_falha_de_dependencia": true,
+      "chave_de_idempotencia": true,
+      "orcamento_de_chamadas": true
+    },
+    "modelo_de_linguagem": {
+      "teto_por_operacao": true,
+      "teto_diario": true,
+      "registro_de_custo": true,
+      "prompt_versionado_com_ancora": true
+    },
+    "observabilidade": {
+      "log_estruturado": true,
+      "correlation_id": true,
+      "health": "liveness+readiness",
+      "ms_id_no_release": true,
+      "metricas_taxa_erro_duracao": true,
+      "trilha_de_acesso_a_dado_pessoal": true
+    },
+    "desempenho": {
+      "contagem_de_queries_em_teste": true,
+      "paginacao_obrigatoria": true,
+      "cache_com_invalidacao_declarada": true,
+      "p95_ms": {
+        "leitura_interativa": 800,
+        "escrita": 1500,
+        "relatorio": 8000,
+        "lote": null
+      },
+      "carga_transferida_kb": 300
+    },
+    "escalabilidade": {
+      "trabalho_pesado_em_fila": true,
+      "teste_de_carga": true,
+      "pool_de_conexao": true,
+      "statement_timeout": true
+    },
+    "reversibilidade": {
+      "migracao_com_down_testado": true,
+      "marcador_execucao_unica": true,
+      "feature_flag_raio_alto": true
+    },
+    "camadas": {
+      "contrato_verificado_no_build": true
+    },
+    "interface": {
+      "sete_estados": true,
+      "acessibilidade": "WCAG 2.2 AA",
+      "zero_mensagem_tecnica": true,
+      "orcamento_de_interacao": true
+    }
+  }
 }

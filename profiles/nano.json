@@ -1,17 +1,46 @@
 {
   "perfil": "nano",
   "descricao": "Script, automação, utilitário, POC. Menos de 5 Micro Specs. Entrega em dias.",
-  "exemplos": ["script de migração de dados", "bot de notificação", "relatório automatizado", "integração pontual entre dois sistemas", "ferramenta CLI"],
+  "exemplos": [
+    "script de migração de dados",
+    "bot de notificação",
+    "relatório automatizado",
+    "integração pontual entre dois sistemas",
+    "ferramenta CLI"
+  ],
   "fases": {
-    "discovery":             { "status": "obrigatoria", "forma": "simplificada — apenas problema e critério de sucesso" },
-    "functional_modeling":   { "status": "ignorada",    "razao": "escopo muito pequeno para justificar modelagem formal" },
-    "architecture":          { "status": "obrigatoria", "forma": "simplificada — ADR de 1 parágrafo" },
-    "spec":                  { "status": "obrigatoria" },
-    "plan":                  { "status": "opcional",    "razao": "aplicar apenas se a MS tiver >3 componentes" },
-    "red":                   { "status": "obrigatoria" },
-    "green":                 { "status": "obrigatoria" },
-    "edge":                  { "status": "opcional",    "razao": "aplicar apenas para código que processa dados externos" },
-    "commit":                { "status": "obrigatoria" }
+    "discovery": {
+      "status": "obrigatoria",
+      "forma": "simplificada — apenas problema e critério de sucesso"
+    },
+    "functional_modeling": {
+      "status": "ignorada",
+      "razao": "escopo muito pequeno para justificar modelagem formal"
+    },
+    "architecture": {
+      "status": "obrigatoria",
+      "forma": "simplificada — ADR de 1 parágrafo"
+    },
+    "spec": {
+      "status": "obrigatoria"
+    },
+    "plan": {
+      "status": "opcional",
+      "razao": "aplicar apenas se a MS tiver >3 componentes"
+    },
+    "red": {
+      "status": "obrigatoria"
+    },
+    "green": {
+      "status": "obrigatoria"
+    },
+    "edge": {
+      "status": "opcional",
+      "razao": "aplicar apenas para código que processa dados externos"
+    },
+    "commit": {
+      "status": "obrigatoria"
+    }
   },
   "limites": {
     "max_micro_specs": 5,
@@ -19,5 +48,41 @@
     "documentacao": "minimal — apenas discovery.md e ADR de 1 parágrafo",
     "cobertura_testes_minima": "60%"
   },
-  "gate_encerramento": "entrega funcional validada pelo solicitante"
+  "gate_encerramento": "entrega funcional validada pelo solicitante",
+  "requisitos_do_produto": {
+    "_nota": "Script, POC. A maior parte das obrigações não se aplica: não há usuário, não há dado de terceiro.",
+    "controle_de_acesso": {
+      "rbac": false,
+      "isolamento_de_linha": false
+    },
+    "dependencia_externa": {
+      "timeout_obrigatorio": true,
+      "retry": false,
+      "circuit_breaker": false
+    },
+    "modelo_de_linguagem": {
+      "teto_por_operacao": true,
+      "registro_de_custo": false
+    },
+    "observabilidade": {
+      "log_estruturado": false,
+      "correlation_id": false,
+      "health": false
+    },
+    "desempenho": {
+      "contagem_de_queries_em_teste": false,
+      "paginacao_obrigatoria": false
+    },
+    "reversibilidade": {
+      "migracao_com_down_testado": true,
+      "marcador_execucao_unica": true
+    },
+    "camadas": {
+      "contrato_verificado_no_build": false
+    },
+    "interface": {
+      "sete_estados": false,
+      "acessibilidade": null
+    }
+  }
 }

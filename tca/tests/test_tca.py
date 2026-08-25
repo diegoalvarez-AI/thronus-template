@@ -1221,5 +1221,168 @@ class TestPacote(unittest.TestCase):
         self.assertEqual(tca.ms_ativa_no_contexto("**MS ativa:** MS-009 — X"), "MS-009 — X")
 
 
+class TestProduto(Base):
+    """`tca produto` cruza o que o perfil exige com o que o projeto verifica."""
+
+    def perfil(self, req: dict) -> None:
+        (self.raiz / "profiles").mkdir(exist_ok=True)
+        (self.raiz / "profiles/standard.json").write_text(
+            json.dumps({"perfil": "standard", "requisitos_do_produto": req}),
+            encoding="utf-8")
+
+    def projeto_cfg(self, verificacoes: dict) -> None:
+        (self.raiz / tca.P_PROJETO_CFG).write_text(
+            json.dumps({"verificacoes": verificacoes}), encoding="utf-8")
+
+    def test_false_e_none_nao_sao_obrigacao(self):
+        """Perfil declara o eixo inteiro; o que não vale para ele sai como False."""
+        self.perfil({"acesso": {"rbac": True, "mfa": False, "slo": None},
+                     "_nota": "comentário não é obrigação"})
+        obr = [k for k, v in tca._achatar("", {"acesso": {"rbac": True, "mfa": False,
+                                                          "slo": None}})
+               if v not in (False, None)]
+        self.assertEqual(obr, ["acesso.rbac"])
+
+    def test_sem_verificacao_declarada_e_residual(self):
+        self.perfil({"acesso": {"rbac": True}})
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["produto"]), 0, "faltar contrato não bloqueia")
+        self.assertIn("SEV-034", tca.ACHADOS)
+
+    def test_verificacao_reprovando_bloqueia(self):
+        self.perfil({"acesso": {"rbac": True}})
+        self.projeto_cfg({"acesso.rbac": "python3 -c \'raise SystemExit(3)\'"})
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["produto", "--verificar"]), 1)
+        self.assertIn("SEV-035", tca.ACHADOS)
+        self.assertNotIn("SEV-034", tca.ACHADOS)
+
+    def test_verificacao_passando_nao_gera_achado(self):
+        self.perfil({"acesso": {"rbac": True}})
+        self.projeto_cfg({"acesso.rbac": "python3 -c \'pass\'"})
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["produto", "--verificar"]), 0)
+        self.assertEqual(tca.ACHADOS, [])
+
+    def test_limiar_por_classe_de_operacao_e_uma_obrigacao_cada(self):
+        """Limiar único produz exceção declarada em quase todo projeto."""
+        self.perfil({"desempenho": {"p95_ms": {"leitura_interativa": 800, "lote": None}}})
+        self.projeto_cfg({"desempenho.p95_ms.leitura_interativa": "python3 -c \'pass\'"})
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["produto", "--verificar"]), 0)
+        self.assertEqual(tca.ACHADOS, [], "lote=None não é obrigação deste perfil")
+
+    def test_perfil_sem_requisitos_do_produto_falha(self):
+        self.perfil({})
+        self.assertEqual(tca.main(["produto"]), 2)
+
+
+class TestFundacao(Base):
+    """MS-000 Fundação: substrato antes da primeira funcionalidade."""
+
+    def com_contrato(self, requisitos: bool = True) -> None:
+        (self.raiz / "profiles").mkdir(exist_ok=True)
+        d = {"perfil": "standard"}
+        if requisitos:
+            d["requisitos_do_produto"] = {"controle_de_acesso": {"rbac": True}}
+        (self.raiz / "profiles/standard.json").write_text(json.dumps(d), encoding="utf-8")
+
+    def fecha(self, ms: str = "MS-021") -> None:
+        self.assertEqual(tca.main(["close-ms", ms, "--testes", "1"]), 0)
+
+    def test_ms_fechada_sem_fundacao_bloqueia(self):
+        self.com_contrato()
+        self.fecha()
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["verify"]), 1)
+        self.assertIn("SEV-036", tca.ACHADOS)
+
+    def test_fundacao_presente_aprova(self):
+        self.com_contrato()
+        (self.raiz / P_ARCHIVE / "ms000.json").write_text(json.dumps(
+            {k: "x" for k in tca.ARCHIVE_CORE}), encoding="utf-8")
+        self.fecha()
+        idx = self.indice()
+        idx["_archive"]["keys"] = sorted(set(idx["_archive"]["keys"]) | {"ms000"})
+        (self.raiz / P_INDEX).write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["verify"]), 0)
+        self.assertNotIn("SEV-036", tca.ACHADOS)
+
+    def test_projeto_anterior_ao_contrato_nao_e_reprovado_retroativamente(self):
+        """Perfil sem requisitos_do_produto é projeto de antes da regra."""
+        self.com_contrato(requisitos=False)
+        self.fecha()
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["verify"]), 0)
+        self.assertNotIn("SEV-036", tca.ACHADOS)
+
+    def test_sem_perfil_resolvivel_a_regra_nao_dispara(self):
+        self.fecha()
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["verify"]), 0)
+
+
+class TestRequisitosDosPerfis(unittest.TestCase):
+    """Contrato entre ARQUITETURA.md, os perfis e o registro de severidade."""
+
+    RAIZ = Path(__file__).resolve().parents[2]
+    EIXOS = ("controle_de_acesso", "dependencia_externa", "modelo_de_linguagem",
+             "observabilidade", "desempenho", "reversibilidade", "camadas", "interface")
+
+    def perfis(self):
+        for f in sorted((self.RAIZ / "profiles").glob("*.json")):
+            yield f.stem, json.loads(f.read_text(encoding="utf-8"))
+
+    def test_todo_perfil_declara_todos_os_eixos(self):
+        for nome, d in self.perfis():
+            req = d.get("requisitos_do_produto")
+            self.assertIsNotNone(req, f"{nome} não declara requisitos_do_produto")
+            for eixo in self.EIXOS:
+                self.assertIn(eixo, req, f"{nome} omite o eixo {eixo}")
+
+    def test_exigencia_cresce_com_o_perfil(self):
+        """Perfil mais exigente nunca exige menos que o mais simples."""
+        def obrigacoes(d):
+            return {k for k, v in tca._achatar("", d["requisitos_do_produto"])
+                    if v not in (False, None)}
+            
+        d = dict(self.perfis())
+        for menor, maior in (("nano", "micro"), ("micro", "standard"),
+                             ("standard", "enterprise")):
+            faltando = obrigacoes(d[menor]) - obrigacoes(d[maior])
+            self.assertEqual(faltando, set(),
+                             f"{maior} exige menos que {menor} em: {sorted(faltando)}")
+
+    def test_desempenho_e_por_classe_de_operacao(self):
+        for nome, d in self.perfis():
+            p95 = d["requisitos_do_produto"]["desempenho"].get("p95_ms")
+            if p95 is None:
+                continue
+            self.assertIsInstance(p95, dict, f"{nome}: limiar único, não por classe")
+            self.assertIn("leitura_interativa", p95, nome)
+            self.assertIn("escrita", p95, nome)
+
+    def test_isolamento_de_linha_obrigatorio_onde_ha_multi_tenant(self):
+        d = dict(self.perfis())
+        for nome in ("standard", "enterprise", "agentes"):
+            self.assertTrue(
+                d[nome]["requisitos_do_produto"]["controle_de_acesso"]["isolamento_de_linha"],
+                f"{nome} é multi-tenant por definição")
+
+    def test_arquitetura_e_canonica(self):
+        self.assertIn("tca/ARQUITETURA.md", tca.CANON_GLOBS)
+        self.assertTrue((self.RAIZ / "tca/ARQUITETURA.md").exists())
+
+    def test_severidades_do_produto_existem_com_ancora(self):
+        reg = json.loads((self.RAIZ / "tca/severidades.json").read_text(encoding="utf-8"))
+        linhas = {r["id"]: r for r in reg["registro"]}
+        for sev, esperado in (("SEV-034", "residual"), ("SEV-035", "bloqueante"),
+                              ("SEV-036", "bloqueante")):
+            self.assertIn(sev, linhas)
+            self.assertEqual(linhas[sev]["severidade"], esperado, sev)
+            self.assertTrue(linhas[sev]["origem"].strip(), f"{sev} sem âncora")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

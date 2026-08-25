@@ -1,17 +1,42 @@
 {
   "perfil": "micro",
   "descricao": "Aplicação web simples, API REST, MVP. 5–15 Micro Specs. Entrega em semanas.",
-  "exemplos": ["site institucional com área logada", "API de integração", "painel administrativo simples", "MVP de produto", "portal de cadastro"],
+  "exemplos": [
+    "site institucional com área logada",
+    "API de integração",
+    "painel administrativo simples",
+    "MVP de produto",
+    "portal de cadastro"
+  ],
   "fases": {
-    "discovery":             { "status": "obrigatoria" },
-    "functional_modeling":   { "status": "recomendada", "razao": "pular apenas se o escopo já estiver completamente definido pelo cliente" },
-    "architecture":          { "status": "obrigatoria" },
-    "spec":                  { "status": "obrigatoria" },
-    "plan":                  { "status": "obrigatoria" },
-    "red":                   { "status": "obrigatoria" },
-    "green":                 { "status": "obrigatoria" },
-    "edge":                  { "status": "obrigatoria" },
-    "commit":                { "status": "obrigatoria" }
+    "discovery": {
+      "status": "obrigatoria"
+    },
+    "functional_modeling": {
+      "status": "recomendada",
+      "razao": "pular apenas se o escopo já estiver completamente definido pelo cliente"
+    },
+    "architecture": {
+      "status": "obrigatoria"
+    },
+    "spec": {
+      "status": "obrigatoria"
+    },
+    "plan": {
+      "status": "obrigatoria"
+    },
+    "red": {
+      "status": "obrigatoria"
+    },
+    "green": {
+      "status": "obrigatoria"
+    },
+    "edge": {
+      "status": "obrigatoria"
+    },
+    "commit": {
+      "status": "obrigatoria"
+    }
   },
   "limites": {
     "max_micro_specs": 15,
@@ -19,5 +44,56 @@
     "documentacao": "discovery.md + functional_model.md (simplificado) + ADR",
     "cobertura_testes_minima": "75%"
   },
-  "gate_encerramento": "homologação pelo cliente em ambiente de staging"
+  "gate_encerramento": "homologação pelo cliente em ambiente de staging",
+  "requisitos_do_produto": {
+    "_nota": "API, MVP, portal. Há usuário e dado de terceiro: acesso e resiliência passam a valer.",
+    "controle_de_acesso": {
+      "rbac": true,
+      "isolamento_de_linha": false,
+      "teste_negativo_obrigatorio": true
+    },
+    "dependencia_externa": {
+      "timeout_obrigatorio": true,
+      "retry": true,
+      "circuit_breaker": true,
+      "teste_de_falha_de_dependencia": true
+    },
+    "modelo_de_linguagem": {
+      "teto_por_operacao": true,
+      "teto_diario": true,
+      "registro_de_custo": true
+    },
+    "observabilidade": {
+      "log_estruturado": true,
+      "correlation_id": true,
+      "health": "liveness+readiness",
+      "ms_id_no_release": true
+    },
+    "desempenho": {
+      "contagem_de_queries_em_teste": true,
+      "paginacao_obrigatoria": true,
+      "p95_ms": {
+        "leitura_interativa": 800,
+        "escrita": 1500,
+        "relatorio": 8000,
+        "lote": null
+      },
+      "carga_transferida_kb": 350
+    },
+    "escalabilidade": {
+      "trabalho_pesado_em_fila": true,
+      "teste_de_carga": false
+    },
+    "reversibilidade": {
+      "migracao_com_down_testado": true,
+      "marcador_execucao_unica": true
+    },
+    "camadas": {
+      "contrato_verificado_no_build": true
+    },
+    "interface": {
+      "sete_estados": true,
+      "acessibilidade": "WCAG 2.2 A"
+    }
+  }
 }

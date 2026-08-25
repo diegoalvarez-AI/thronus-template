@@ -141,6 +141,39 @@ quando quem avalia tem interesse na aprovação.
 quantas dependem de revisor humano. É um número útil por si: mede o quanto do método já
 executa sozinho.
 
+### `tca produto [--verificar]`
+
+Cruza o que o **perfil exige do produto** com o que o **projeto declara verificar**.
+
+| Artefato | Declara |
+|---|---|
+| `tca/ARQUITETURA.md` | **o que** todo produto precisa ter, como obrigação agnóstica de stack |
+| `profiles/<perfil>.json → requisitos_do_produto` | **quais** obrigações valem no perfil e com que limiar |
+| `tca.project.json → verificacoes` | **como** este projeto verifica cada uma |
+
+A chave de `verificacoes` é o caminho pontuado da obrigação no perfil; o valor é um comando
+que sai `0` quando ela está satisfeita:
+
+```json
+{
+  "verificacoes": {
+    "controle_de_acesso.isolamento_de_linha": "pytest tests/security/test_rls.py",
+    "camadas.contrato_verificado_no_build": "lint-imports",
+    "desempenho.p95_ms.leitura_interativa": "python3 scripts/p95.py --classe leitura --teto 800"
+  }
+}
+```
+
+Sem `--verificar`, lista o estado declarativo. Com `--verificar`, executa cada comando.
+Obrigação sem verificação declarada é **SEV-034** (residual); obrigação reprovando é
+**SEV-035** (bloqueante). A verificação é do projeto porque a TCA não sabe medir p95 nem
+provar isolamento de linha em stack nenhuma — e adivinhar seria a inferência que o método
+proíbe.
+
+Limiar de desempenho é declarado **por classe de operação**, nunca como número único:
+limiar único produz exceção declarada em quase todo projeto, e exceção rotineira é o começo
+do portão que ninguém respeita.
+
 ### `tca gate [--de VERIF,...] [--achados ID,...] [--pendencia ID=Nome]`
 
 Calcula o estado do portão sob **não compensação**, nos três estados do ÂNCORA:
@@ -151,7 +184,7 @@ Calcula o estado do portão sob **não compensação**, nos três estados do ÂN
 | `CONDICIONADO` | pendências residuais, **todas com responsável nomeado** |
 | `NAO_ATENDIDO` | qualquer bloqueante, ou pendência sem responsável |
 
-`--de diff,trace,selfcheck,doctor` executa as verificações e traduz o que elas encontram
+`--de diff,trace,selfcheck,doctor,verify,produto` executa as verificações e traduz o que elas encontram
 em identificadores do registro — o portão deixa de depender de alguém converter código de
 saída em achado à mão. `--achados` cobre o que ainda depende de revisor, e os dois somam.
 
