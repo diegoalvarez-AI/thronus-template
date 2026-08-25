@@ -970,6 +970,47 @@ class TestMetrics(unittest.TestCase):
         self.assertNotIn("loop_local_segundos", reg["indicadores"])
         self.assertTrue(any("testes_relacionados" in n for n in reg["nao_instrumentado"]))
 
+    def _fecha(self, ms, declarados, cenarios="CT-01, CT-02"):
+        (self.dir / P_CTX).parent.mkdir(parents=True, exist_ok=True)
+        (self.dir / P_CTX).write_text(
+            f"**Fase atual:** GREEN\n**MS ativa:** {ms} — X\n"
+            f"**Arquivos a criar/modificar:** {declarados}\n"
+            f"**Cenários BDD:** {cenarios}\n", encoding="utf-8")
+        tca.main(["close-ms", ms])
+
+    def test_densidade_exige_contexto_preservado(self):
+        """Archive legado não tem o contexto: densidade vira lacuna, não zero."""
+        (self.dir / P_ARCHIVE / "ms001.json").write_text(
+            json.dumps({"ms": "MS-001", "nome": "legado"}), encoding="utf-8")
+        tca.main(["metrics", "--write"])
+        reg = json.loads((self.dir / tca.P_METRICAS).read_text(encoding="utf-8")
+                         .strip().splitlines()[-1])
+        self.assertNotIn("linhas_por_arquivo_declarado", reg["indicadores"])
+        self.assertTrue(any("contexto" in n for n in reg["nao_instrumentado"]))
+
+    def test_densidade_calculada_de_ms_fechada_pelo_comando(self):
+        self._fecha("MS-001", "a.py, b.py")
+        self._commit("feat(x): entrega [MS-001]", "a.py", "conteudo\n")
+        tca.main(["metrics", "--write"])
+        ind = self._registro()
+        self.assertIn("cenarios_por_ms_mediana", ind)
+        self.assertEqual(ind["cenarios_por_ms_mediana"]["valor"], 2)
+        self.assertIn("cobertura", ind["cenarios_por_ms_mediana"])
+
+    def test_custo_fixo_declara_ser_teto_e_nao_piso(self):
+        tca.main(["metrics", "--write"])
+        d = self._registro().get("custo_fixo_estimado_horas", {})
+        if d.get("valor") is not None:
+            self.assertIn("TETO", d["nota"], "estimativa tem de declarar que é limite superior")
+        else:
+            self.assertEqual(d["origem"], "lacuna")
+
+    def test_parcela_mecanica_do_custo_fixo_e_medida(self):
+        tca.main(["metrics", "--write"])
+        d = self._registro()["custo_fixo_mecanico_segundos"]
+        self.assertEqual(d["origem"], "derivado:execucao")
+        self.assertIsNotNone(d["valor"])
+
     def test_detectar_nao_executa(self):
         (self.dir / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
         (self.dir / "marcador").write_text("intacto", encoding="utf-8")

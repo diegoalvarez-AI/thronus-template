@@ -1543,6 +1543,113 @@ def cmd_gate(args) -> int:
     return 0 if estado != "NAO_ATENDIDO" else 1
 
 
+def _densidade_especificacao(raiz: Path, por_ms: dict) -> dict:
+    """Superfície de invenção: quanto a spec declara por unidade entregue.
+
+    Spec pouco densa deixa espaço para o agente inventar dentro da MS — que é a
+    origem do preenchimento silencioso de lacuna. Só é calculável para MS
+    fechadas pelo `close-ms`, porque é ele que preserva o contexto verbatim.
+    """
+    arch_dir = raiz / P_ARCHIVE
+    if not arch_dir.is_dir():
+        return {"_lacuna": "sem payload_archive — densidade não calculável"}
+
+    arquivos = sorted(arch_dir.glob("*.json"))
+    razao, linhas_por_decl, cenarios, com_spec = [], [], [], 0
+    for a in arquivos:
+        try:
+            d = json.loads(a.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        ctx = d.get("contexto_ativo")
+        if not isinstance(ctx, str):
+            continue
+        com_spec += 1
+        declarados = arquivos_declarados(ctx)
+        cenarios.append(len(set(re.findall(r"\bCT-\d+", ctx))))
+        commits = por_ms.get(d.get("ms"), [])
+        tocados = {f for c in commits for f in c["arquivos"]}
+        linhas = sum(c["add"] + c["rem"] for c in commits)
+        if declarados:
+            razao.append(len(tocados) / len(declarados))
+            linhas_por_decl.append(linhas / len(declarados))
+
+    if not com_spec:
+        return {"_lacuna": f"nenhum archive preserva contexto — densidade só é "
+                           f"calculável em MS fechadas por `tca close-ms` "
+                           f"(0 de {len(arquivos)})"}
+    cob = f"{com_spec}/{len(arquivos)}"
+    saida = {"cenarios_por_ms_mediana":
+             {"valor": _mediana(cenarios), "origem": "derivado:archives", "cobertura": cob}}
+    if linhas_por_decl:
+        saida["linhas_por_arquivo_declarado"] = {
+            "valor": round(_mediana(linhas_por_decl), 1), "origem": "derivado:archives+git",
+            "cobertura": cob, "nota": "superfície de invenção por unidade declarada"}
+        saida["arquivos_tocados_por_declarado"] = {
+            "valor": round(_mediana(razao), 2), "origem": "derivado:archives+git",
+            "cobertura": cob, "nota": "1,0 = entregou exatamente o previsto"}
+    return saida
+
+
+def _custo_fixo(raiz: Path, por_ms: dict, timeout: int) -> dict:
+    """Piso da decomposição: o que se paga por MS independente do tamanho dela.
+
+    Duas parcelas. A mecânica é medida — tempo dos comandos de verificação. A
+    humana é estimada pelo lead time das MS menores, onde o trabalho em si é
+    pequeno e o que sobra é overhead. Estimativa é rotulada como tal.
+    """
+    from datetime import datetime as _dt
+
+    perfil = []
+    for ms, cs in por_ms.items():
+        linhas = sum(c["add"] + c["rem"] for c in cs)
+        fim = max(_dt.fromisoformat(c["data"]) for c in cs)
+        perfil.append({"ms": ms, "linhas": linhas, "fim": fim})
+    perfil.sort(key=lambda r: r["fim"])
+    for i in range(1, len(perfil)):
+        perfil[i]["lead_h"] = (perfil[i]["fim"] - perfil[i - 1]["fim"]).total_seconds() / 3600
+
+    com_lead = [r for r in perfil if "lead_h" in r]
+    saida: dict = {}
+    if len(com_lead) >= 8:
+        por_tamanho = sorted(com_lead, key=lambda r: r["linhas"])
+        q = max(1, len(por_tamanho) // 4)
+        menores, maiores = por_tamanho[:q], por_tamanho[-q:]
+        piso = _mediana([r["lead_h"] for r in menores])
+        topo = _mediana([r["lead_h"] for r in maiores])
+        med_menores = _mediana([r["linhas"] for r in menores])
+        saida["custo_fixo_estimado_horas"] = {
+            "valor": round(piso, 2), "origem": "derivado:estimativa",
+            "nota": f"quartil menor n={len(menores)}, mediana {med_menores:.0f} linhas; "
+                    f"quartil maior {topo:.2f}h. É TETO do piso: a menor MS observada "
+                    f"tem {med_menores:.0f} linhas, então o piso real é menor e "
+                    f"desconhecido"}
+    else:
+        saida["custo_fixo_estimado_horas"] = {
+            "valor": None, "origem": "lacuna",
+            "nota": f"amostra insuficiente ({len(com_lead)} MS com lead time; mínimo 8)"}
+
+    # parcela mecânica: os comandos de verificação que todo fechamento paga
+    import time as _t
+    t0 = _t.monotonic()
+    for cmd in ("verify", "diff"):
+        _rodar(raiz, f"{Path(__file__).resolve()} {cmd}", timeout)
+    mecanico = round(_t.monotonic() - t0, 1)
+    saida["custo_fixo_mecanico_segundos"] = {
+        "valor": mecanico, "origem": "derivado:execucao",
+        "nota": "verify + diff; não inclui a escrita do close-ms"}
+
+    est = saida.get("custo_fixo_estimado_horas", {}).get("valor")
+    if est:
+        pct = 100 * (mecanico / 3600) / est
+        saida["custo_fixo_mecanico_pct"] = {
+            "valor": round(pct, 2), "origem": "derivado:execucao",
+            "nota": "fração do piso que é máquina — o resto é humano: escrever "
+                    "spec, revisar, aprovar. Automatizar o fechamento não baixa "
+                    "o piso da decomposição"}
+    return saida
+
+
 def cmd_metrics(args) -> int:
     """Linha de base do processo, derivada do que já aconteceu.
 
@@ -1668,6 +1775,9 @@ def cmd_metrics(args) -> int:
         _aplicar(_contar_testes(raiz, args.timeout))
     if args.perfil_suite:
         _aplicar(_perfil_suite(raiz, args.timeout))
+    if not sem_historico:
+        _aplicar(_densidade_especificacao(raiz, por_ms))
+        _aplicar(_custo_fixo(raiz, por_ms, args.timeout))
     if args.medir_loop:
         total_t = registro["indicadores"].get("suite_testes", {}).get("valor")
         _aplicar(_medir_loop(raiz, args.timeout, args.amostra, total_t))

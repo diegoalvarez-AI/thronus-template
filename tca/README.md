@@ -303,6 +303,33 @@ produtividade" é a mesma declaração não verificável que o método critica.
 proveniência aplicada à própria medição: um número derivado de 8 de 41 archives não vale o
 mesmo que um derivado de 104 commits, e a saída diz qual é qual.
 
+#### Densidade de especificação e piso da decomposição
+
+Dois indicadores que decidem **quão pequena a Micro Spec deve ser**.
+
+**Densidade** — quanto a spec declara por unidade entregue. Spec pouco densa deixa espaço
+para o agente inventar dentro da MS, que é a origem do preenchimento silencioso de lacuna:
+
+| Indicador | O que diz |
+|---|---|
+| `linhas_por_arquivo_declarado` | superfície de invenção por unidade declarada |
+| `arquivos_tocados_por_declarado` | 1,0 significa que entregou exatamente o previsto |
+| `cenarios_por_ms_mediana` | densidade de cenário na spec |
+
+Só é calculável em MS fechadas por `tca close-ms`, porque é ele que preserva o
+`contexto_ativo` verbatim. Archive legado vira **lacuna declarada, não zero**.
+
+**Piso da decomposição** — o que se paga por MS independente do tamanho. Duas parcelas:
+
+- `custo_fixo_mecanico_segundos` — **medido**: tempo dos comandos de verificação;
+- `custo_fixo_estimado_horas` — **estimado** pelo lead time do quartil de MS menores, e
+  rotulado como **teto do piso**: se a menor MS observada tem centenas de linhas, o piso
+  real é menor e desconhecido.
+
+`custo_fixo_mecanico_pct` mostra a fração do piso que é máquina. Quando ela é próxima de
+zero, o piso é humano — escrever spec, revisar, aprovar — e automatizar o fechamento **não
+o baixa**.
+
 #### Medição automática da suíte
 
 `--medir-suite` executa e cronometra o comando que o projeto declara em
