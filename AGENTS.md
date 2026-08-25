@@ -120,6 +120,37 @@ disciplina.
 Antes de abrir trabalho novo, `tca verify` confere a coerência dos artefatos de controle e
 `tca doctor` reporta divergência entre a metodologia deste projeto e o canon declarado.
 
+### Snapshot-diff bidirecional
+
+O `activeContext.md` declara os arquivos que a Micro Spec vai criar ou modificar:
+
+```
+**Arquivos a criar/modificar:** src/dominio/turma.py, tests/domain/test_turma.py
+```
+
+ou, em lista:
+
+```
+**Arquivos a criar/modificar:**
+- src/dominio/turma.py
+- tests/domain/test_turma.py
+```
+
+Travessão (`—`) significa nenhum arquivo. **Campo ausente é lacuna, não permissão.**
+
+`tca diff` compara essa lista com o que foi de fato tocado e reprova nos dois sentidos:
+arquivo fora da spec e **arquivo previsto que não foi entregue**. O segundo é a assinatura
+da entrega parcial, e é o que um gate unidirecional deixa passar em silêncio.
+
+### Auto-verificação do pipeline
+
+`tca selfcheck` pergunta se a própria verificação está de pé: o contrato de execução
+existe, a contagem de testes não caiu em relação à última medição desta máquina, e a
+última execução da suíte não terminou em erro.
+
+Existe porque uma suíte que não executa é indistinguível de uma suíte que passa, para
+quem só lê o resultado agregado.
+
 ## 6. Port/Adapter Pattern
 
 Serviços de aplicação dependem de interfaces/contratos (em `application/ports/`), nunca de implementações concretas de infraestrutura. Isso permite testes unitários sem banco de dados ou rede.
