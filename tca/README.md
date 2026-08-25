@@ -141,7 +141,7 @@ quando quem avalia tem interesse na aprovação.
 quantas dependem de revisor humano. É um número útil por si: mede o quanto do método já
 executa sozinho.
 
-### `tca gate --achados ID,... [--pendencia ID=Nome]`
+### `tca gate [--de VERIF,...] [--achados ID,...] [--pendencia ID=Nome]`
 
 Calcula o estado do portão sob **não compensação**, nos três estados do ÂNCORA:
 
@@ -150,6 +150,10 @@ Calcula o estado do portão sob **não compensação**, nos três estados do ÂN
 | `ATENDIDO` | nenhum bloqueante, nenhuma pendência sem dono |
 | `CONDICIONADO` | pendências residuais, **todas com responsável nomeado** |
 | `NAO_ATENDIDO` | qualquer bloqueante, ou pendência sem responsável |
+
+`--de diff,trace,selfcheck,doctor` executa as verificações e traduz o que elas encontram
+em identificadores do registro — o portão deixa de depender de alguém converter código de
+saída em achado à mão. `--achados` cobre o que ainda depende de revisor, e os dois somam.
 
 Três propriedades que, juntas, são a não compensação:
 

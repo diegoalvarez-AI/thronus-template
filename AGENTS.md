@@ -186,7 +186,12 @@ Critério avaliado por julgamento carrega o viés de quem conduz a avaliação, 
 | `residual` | Pendência residual. Permite CONDICIONADO **apenas com responsável nomeado**. |
 | `informativo` | Registrado; não afeta o estado. |
 
-`tca gate --achados SEV-007,SEV-023 --pendencia SEV-023=Nome` calcula o estado. Três
+`tca gate --de diff,trace,selfcheck,doctor` executa as verificações e **colhe o que elas
+encontram**, no vocabulário do registro. Verificação que devolve só código de saída não
+compõe: o portão precisa saber *o que* falhou para aplicar a regra. `--achados` continua
+disponível para o que ainda depende de revisor humano, e os dois se somam.
+
+O estado é calculado assim. Três
 propriedades, que juntas são a não compensação:
 
 1. Bloqueante insatisfeito produz sempre NÃO ATENDIDO — desempenho em outro critério não

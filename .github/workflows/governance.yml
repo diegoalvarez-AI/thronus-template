@@ -95,6 +95,9 @@ jobs:
       - name: Registro de severidade
         run: ./tca/bin/tca sev --validar
 
+      - name: Portão de governança
+        run: ./tca/bin/tca gate --portao governance --de doctor,trace
+
       - name: Testes do pacote tca
         run: python3 tca/tests/test_tca.py
 

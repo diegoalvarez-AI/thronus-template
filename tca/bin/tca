@@ -128,6 +128,18 @@ CANON_GLOBS = (
 SEVERIDADES = PKG_DIR / "severidades.json"
 NIVEIS = ("bloqueante", "residual", "informativo")
 
+# Achados da execução corrente, no vocabulário do registro. Verificação que
+# devolve só código de saída não compõe: o portão precisa saber O QUE falhou
+# para aplicar a regra de não compensação.
+ACHADOS: list[str] = []
+
+
+def _achado(sev: str, detalhe: str = "") -> None:
+    if sev not in ACHADOS:
+        ACHADOS.append(sev)
+    if detalhe:
+        print(f"{sev}    {detalhe}")
+
 # AGENTS.md é gerado: metodologia canônica + parte do projeto. Um harness sem
 # suporte a include precisa continuar lendo um arquivo só, então a concatenação
 # é material — mas verificada, o que a distingue de uma cópia editada à mão.
@@ -1031,6 +1043,7 @@ def cmd_diff(args) -> int:
     texto = ctx_path.read_text(encoding="utf-8")
     declarados = arquivos_declarados(texto)
     if declarados is None:
+        _achado("SEV-009")
         raise TcaError(
             f"{P_CTX} não declara `**Arquivos a criar/modificar:**`.\n"
             "Sem lista prevista não há snapshot-diff — lacuna, não aprovação."
@@ -1052,6 +1065,10 @@ def cmd_diff(args) -> int:
         print(f"INESPERADO {f}")
     for f in faltantes:
         print(f"FALTANTE   {f}  (previsto na spec, não entregue)")
+    if inesperados:
+        _achado("SEV-008")
+    if faltantes:
+        _achado("SEV-007")
 
     falhou = bool(inesperados or faltantes)
     registrar_execucao(raiz, "diff", "falha" if falhou else "ok", {
@@ -1080,6 +1097,7 @@ def cmd_selfcheck(args) -> int:
     # 1. O contrato de execução existe?
     cmds = _ler_cfg(raiz)
     if not cmds.get("testes"):
+        _achado("SEV-012")
         falhas.append(f"{P_PROJETO_CFG} não declara comandos.testes — "
                       "não há como afirmar que a suíte roda")
     if not cmds.get("contar_testes"):
@@ -1103,6 +1121,7 @@ def cmd_selfcheck(args) -> int:
         queda = anterior - atual
         margem = max(1, int(anterior * args.tolerancia / 100))
         if queda > margem:
+            _achado("SEV-010")
             falhas.append(f"contagem de testes caiu de {anterior} para {atual} "
                           f"(queda de {queda}, tolerância {margem})")
         else:
@@ -1115,6 +1134,7 @@ def cmd_selfcheck(args) -> int:
     if reg:
         res = reg.get("indicadores", {}).get("suite_segundos", {}).get("resultado")
         if res and res != "ok":
+            _achado("SEV-011")
             falhas.append(f"última execução registrada da suíte terminou em {res}")
 
     for a in avisos:
@@ -1282,6 +1302,8 @@ def cmd_trace(args) -> int:
           + (f"  ({', '.join(f'{k}:{v}' for k, v in sorted(por_tipo.items()))})" if por_tipo else ""))
     if universo is not None:
         print(f"       cobertura de requisito  {len(universo) - len(sem_cobertura)}/{len(universo)}")
+        if sem_cobertura:
+            _achado("SEV-014")
         for i in sem_cobertura[:10]:
             print(f"         SEM TESTE  {i}")
         if len(sem_cobertura) > 10:
@@ -1371,6 +1393,28 @@ def cmd_gate(args) -> int:
     """
     reg = _ler_severidades()
     achados = [a.strip().upper() for a in (args.achados or "").split(",") if a.strip()]
+
+    # --de executa as verificações e colhe o que elas encontraram, em vez de
+    # exigir que alguém traduza código de saída em achado à mão.
+    if args.de:
+        from argparse import Namespace
+        disponiveis = {
+            "diff": (cmd_diff, Namespace(cached=False)),
+            "trace": (cmd_trace, Namespace(write=False, strict=False, impacto=None)),
+            "selfcheck": (cmd_selfcheck, Namespace(tolerancia=2.0, timeout=600)),
+            "doctor": (cmd_doctor, Namespace(strict=False)),
+        }
+        for nome in [n.strip() for n in args.de.split(",") if n.strip()]:
+            if nome not in disponiveis:
+                raise TcaError(f"verificação desconhecida: {nome!r}. "
+                               f"Disponíveis: {', '.join(sorted(disponiveis))}")
+            fn, ns = disponiveis[nome]
+            print(f"       ── {nome}")
+            try:
+                fn(ns)
+            except TcaError as e:
+                print(f"       {e}".replace("\n", "\n       "))
+        achados += [a for a in ACHADOS if a not in achados]
     pendencias = {}
     for p in args.pendencia or []:
         alvo, _, resp = p.partition("=")
@@ -1735,6 +1779,7 @@ def cmd_doctor(args) -> int:
     if ov_path.exists():
         for o in ler_json(ov_path).get("overrides", []):
             if not all(k in o for k in ("arquivo", "motivo", "responsavel")):
+                _achado("SEV-005")
                 raise TcaError(
                     f"{P_OVERRIDES}: todo override exige arquivo, motivo e responsavel. "
                     "Papel genérico não satisfaz."
@@ -1776,11 +1821,14 @@ def cmd_doctor(args) -> int:
         print(f"OVERRIDE {n}  — {o['motivo']} ({o['responsavel']})")
 
     if canon_regenerado:
+        _achado("SEV-003")
         print("CANON    tca/CANON.sha256 foi regenerado neste projeto — "
               "o hash não confere com o fixado em tca.lock.json")
         print("         Metodologia alterada localmente. Declare override ou "
               "atualize a versão da TCA.")
 
+    if divergentes or ausentes or extras:
+        _achado("SEV-004")
     nao_declarados = len(divergentes) + len(ausentes) + len(extras) + int(canon_regenerado)
     registrar_execucao(raiz, "doctor", "falha" if (nao_declarados and args.strict) else "ok", {
         "identicos": len(idem), "divergentes": len(divergentes),
@@ -1836,6 +1884,8 @@ def main(argv=None) -> int:
     gt = sub.add_parser("gate", help="estado do portão sob não compensação")
     gt.add_argument("--portao", help="nome do portão avaliado")
     gt.add_argument("--achados", help="identificadores separados por vírgula")
+    gt.add_argument("--de", help="executa verificações e colhe os achados: "
+                                 "diff,trace,selfcheck,doctor")
     gt.add_argument("--pendencia", action="append",
                     help="SEV-NNN=Responsável — nomeia o dono de uma pendência residual")
     gt.set_defaults(fn=cmd_gate)

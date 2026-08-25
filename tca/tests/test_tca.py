@@ -399,6 +399,38 @@ class TestSeveridadeEGate(Base):
         self.assertEqual(tca.main(["gate", "--achados", "SEV-999"]), 2,
                          "severidade não consta: declarar a linha é decisão de método")
 
+    def test_gate_colhe_achados_das_verificacoes(self):
+        """O portão executa as verificações e traduz o que elas encontram."""
+        import subprocess
+        subprocess.run(["git", "-C", str(self.raiz), "init", "-q", "-b", "main"],
+                       check=True, capture_output=True)
+        (self.raiz / "src").mkdir(exist_ok=True)
+        (self.raiz / "src/a.py").write_text("x\n", encoding="utf-8")
+        (self.raiz / "src/b.py").write_text("y\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.raiz), "add", "-A"], check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(self.raiz), "-c", "user.email=t@t",
+                        "-c", "user.name=t", "commit", "-qm", "base"],
+                       check=True, capture_output=True)
+        (self.raiz / P_CTX).write_text(
+            "**MS ativa:** MS-021 — X\n"
+            "**Arquivos a criar/modificar:** src/a.py, src/b.py\n", encoding="utf-8")
+        (self.raiz / "src/a.py").write_text("alterado\n", encoding="utf-8")   # b.py não entregue
+
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["gate", "--portao", "COMMIT", "--de", "diff"]), 1)
+        self.assertIn("SEV-007", tca.ACHADOS, "faltante deve virar achado do registro")
+
+    def test_verificacao_desconhecida_em_de_e_erro(self):
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["gate", "--de", "inexistente"]), 2)
+
+    def test_achados_manuais_e_colhidos_se_somam(self):
+        """Projeto sem os arquivos do canon: o doctor acha ausência (SEV-004),
+        que se soma à nota informada à mão — e o bloqueante vence."""
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["gate", "--achados", "SEV-025", "--de", "doctor"]), 1)
+        self.assertIn("SEV-004", tca.ACHADOS, "achado colhido do doctor")
+
     def test_gate_emite_evidencia(self):
         tca.main(["gate", "--portao", "COMMIT", "--achados", "SEV-025"])
         reg = json.loads((self.raiz / P_EXEC).read_text(encoding="utf-8").strip().splitlines()[-1])
