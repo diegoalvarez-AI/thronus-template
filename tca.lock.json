@@ -1,9 +1,9 @@
 {
   "tca": {
     "origem": "https://github.com/diegoalvarez-AI/thronus-template.git",
-    "versao": "2.0.0",
-    "ref": "v2.0.0",
+    "versao": "2.1.0",
+    "ref": "v2.1.0",
     "canon_sha256": "5d28ac4db3a434200cdf9a634b06e2a43b2a43bc86b0c276411d92dea911c711",
-    "instalado_em": "2026-08-24"
+    "instalado_em": "2026-08-25"
   }
 }

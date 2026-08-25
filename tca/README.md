@@ -164,6 +164,42 @@ Sem `--apply`, só reporta e sai com 1 quando há atraso. Com `--apply`:
 Depois de aplicar, rode `tca agents --write` (a metodologia mudou, o gerado precisa
 acompanhar) e `tca doctor --strict`.
 
+### `tca metrics [--repo D] [--desde REF] [--suite-segundos N] [--write]`
+
+**Linha de base do processo, derivada do que já aconteceu.** Não muda nada no fluxo, não
+pede dado novo e não instrumenta a execução: lê o histórico git e os archives.
+
+Existe pelo requisito de ancoragem econômica do ÂNCORA — *benefício que não foi definido
+antes não pode ser verificado depois*. Sem medir o processo antes de mudá-lo, "melhora a
+produtividade" é a mesma declaração não verificável que o método critica.
+
+| Indicador | Origem |
+|---|---|
+| `ms_entregues` | commits cujo assunto cita `MS-NNN` |
+| `ms_com_archive_pct` | quantas dessas MS têm registro de archive — **o gap documental, quantificado** |
+| `commits_por_ms_mediana` | git |
+| `arquivos_por_ms_mediana` · `linhas_por_ms_mediana` | git — dimensionam se a Micro Spec é de fato micro |
+| `duracao_ms_horas_mediana` | git, só sobre MS com mais de um commit |
+| `lead_time_entre_ms_horas_mediana` | intervalo entre fechamentos — a cadência real |
+| `correcoes_apos_entrega` | commits `fix` posteriores ao primeiro commit da MS — proxy de retrabalho |
+| `testes_por_ms_mediana` | archives, **com a cobertura do campo declarada** |
+
+**Cada valor declara a própria origem** — `derivado:git`, `derivado:archives` ou
+`reportado` — e a cobertura quando o campo não existe em todo o histórico. É a exigência de
+proveniência aplicada à própria medição: um número derivado de 8 de 41 archives não vale o
+mesmo que um derivado de 104 commits, e a saída diz qual é qual.
+
+O que não é instrumentável hoje aparece como **lacuna declarada**, não estimado:
+
+- `token_por_ms` — o harness não expõe consumo ao processo;
+- `suite_segundos` — depende do runner do projeto; informe por `--suite-segundos` e o valor
+  fica marcado como `reportado`;
+- `ms_estacionadas` e `tempo_de_fila` — exigem a triagem de não conformidade em classes,
+  que ainda não existe.
+
+`--repo` mede outro repositório sem escrever nada nele. Sem `--write` é relatório puro:
+não grava linha de base nem registro de execução — é comando de medida, não portão.
+
 ### `tca verify-self`
 
 Confere `MANIFEST.sha256` contra o conteúdo do pacote. A TCA é fonte canônica: precisa

@@ -18,6 +18,7 @@ Comandos:
   tca agents [--write]           gera/verifica o AGENTS.md
   tca lock [--write]             fixa a origem e o hash do canon instalado
   tca update [--apply]           confere/aplica versão nova a partir da origem
+  tca metrics [--repo D]         linha de base derivada do histórico
 
 Todo comando emite registro de execução em
 docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl — portão que não
@@ -44,6 +45,7 @@ P_INDEX = "docs/ThronusSpec/03_Desenvolvimento/payload_index.json"
 P_ARCHIVE = "docs/ThronusSpec/03_Desenvolvimento/payload_archive"
 P_LOGS = "docs/ThronusSpec/05_Monitoramento/performance_logs.json"
 P_EXEC = "docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl"
+P_METRICAS = "docs/ThronusSpec/05_Monitoramento/metricas.jsonl"
 P_CTX = "context/activeContext.md"
 
 # Núcleo obrigatório do registro de archive. É o único contrato que a TCA
@@ -653,6 +655,175 @@ def cmd_update(args) -> int:
     return 0
 
 
+def _mediana(xs: list[float]) -> float | None:
+    if not xs:
+        return None
+    ys = sorted(xs)
+    n = len(ys)
+    return ys[n // 2] if n % 2 else (ys[n // 2 - 1] + ys[n // 2]) / 2
+
+
+def _commits_por_ms(raiz: Path, desde: str | None) -> dict[str, list[dict]]:
+    """Agrupa commits por MS-NNN citado no assunto. Só o que o git já registra."""
+    faixa = [f"{desde}..HEAD"] if desde else []
+    saida = _git(raiz, "log", *faixa, "--no-merges", "--numstat",
+                 "--date=iso-strict", "--format=%x01%H%x02%ad%x02%s")
+    if saida is None:
+        raise TcaError(f"não foi possível ler o histórico git de {raiz}")
+
+    por_ms: dict[str, list[dict]] = {}
+    for bloco in saida.split("\x01"):
+        bloco = bloco.strip("\n")
+        if not bloco:
+            continue
+        cab, _, corpo = bloco.partition("\n")
+        partes = cab.split("\x02")
+        if len(partes) < 3:
+            continue
+        sha, data, assunto = partes[0], partes[1], partes[2]
+        m = re.search(r"\bMS-(\d{3,})\b", assunto)
+        if not m:
+            continue
+        arquivos, add, rem = [], 0, 0
+        for linha in corpo.splitlines():
+            campos = linha.split("\t")
+            if len(campos) != 3:
+                continue
+            a, r, nome = campos
+            arquivos.append(nome)
+            add += int(a) if a.isdigit() else 0
+            rem += int(r) if r.isdigit() else 0
+        ms = f"MS-{m.group(1)}"
+        por_ms.setdefault(ms, []).append({
+            "sha": sha, "data": data, "assunto": assunto,
+            "arquivos": arquivos, "add": add, "rem": rem,
+            "correcao": bool(re.match(r"^(fix|hotfix)\b", assunto)),
+        })
+    return por_ms
+
+
+def cmd_metrics(args) -> int:
+    """Linha de base do processo, derivada do que já aconteceu.
+
+    Não muda nada no fluxo e não pede dado novo: lê git e os archives. Cada
+    indicador declara sua origem, e o que não é instrumentável hoje é listado
+    como lacuna em vez de estimado.
+    """
+    from datetime import datetime as _dt
+
+    raiz = Path(args.repo).resolve() if args.repo else achar_raiz(Path.cwd())
+    if not (raiz / ".git").exists():
+        raise TcaError(f"{raiz} não é um repositório git — sem histórico não há linha de base.")
+
+    por_ms = _commits_por_ms(raiz, args.desde)
+    if not por_ms:
+        print("AVISO  nenhum commit cita MS-NNN no assunto — sem linha de base derivável.")
+        print("       A convenção Conventional Commits com MS-ID é o que torna isto mensurável.")
+        return 0
+
+    def _quando(c):
+        return _dt.fromisoformat(c["data"])
+
+    commits_por, arquivos_por, linhas_por, duracao_por = [], [], [], []
+    correcoes_pos_fechamento = 0
+    fechamentos: list[tuple] = []
+
+    for ms, cs in por_ms.items():
+        # git log vem do mais novo para o mais antigo. Inverter preserva a ordem
+        # real mesmo quando dois commits caem no mesmo segundo — comparar por
+        # timestamp perde a ordem em commits rápidos.
+        cs.reverse()
+        commits_por.append(len(cs))
+        arquivos_por.append(len({a for c in cs for a in c["arquivos"]}))
+        linhas_por.append(sum(c["add"] + c["rem"] for c in cs))
+        if len(cs) > 1:
+            duracao_por.append((_quando(cs[-1]) - _quando(cs[0])).total_seconds() / 3600)
+        fechamentos.append((_quando(cs[-1]), ms))
+        # Correção depois do primeiro commit não-correção da MS: proxy de retrabalho.
+        # Por posição, não por data, pelo mesmo motivo.
+        i_feat = next((i for i, c in enumerate(cs) if not c["correcao"]), None)
+        if i_feat is not None:
+            correcoes_pos_fechamento += sum(1 for c in cs[i_feat + 1:] if c["correcao"])
+
+    fechamentos.sort()
+    lead_times = [(fechamentos[i + 1][0] - fechamentos[i][0]).total_seconds() / 3600
+                  for i in range(len(fechamentos) - 1)]
+
+    # testes por MS: só o campo canônico. Histórico legado não é remapeado por
+    # inferência — a cobertura do campo é reportada como está.
+    arch_dir = raiz / P_ARCHIVE
+    archives = sorted(arch_dir.glob("*.json")) if arch_dir.is_dir() else []
+    testes, com_campo = [], 0
+    for a in archives:
+        try:
+            d = json.loads(a.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(d.get("testes"), int):
+            testes.append(d["testes"])
+            com_campo += 1
+
+    # MS commitada sem registro de archive é o gap documental, quantificado.
+    ms_com_archive = sum(
+        1 for ms in por_ms if (arch_dir / f"{ms.lower().replace('-', '')}.json").exists())
+
+    def ind(valor, origem, **extra):
+        return {"valor": valor, "origem": origem, **extra}
+
+    datas = sorted(c["data"] for cs in por_ms.values() for c in cs)
+    registro = {
+        "ts": agora(),
+        "repo": raiz.name,
+        "ref": _git(raiz, "rev-parse", "HEAD") or "desconhecida",
+        "tca_versao": versao_pacote(),
+        "janela": {"desde": datas[0][:10], "ate": datas[-1][:10]},
+        "indicadores": {
+            "ms_entregues": ind(len(por_ms), "derivado:git"),
+            "ms_com_archive_pct": ind(
+                round(100 * ms_com_archive / len(por_ms), 1), "derivado:git+archives",
+                nota=f"{ms_com_archive}/{len(por_ms)} — gap documental"),
+            "commits_por_ms_mediana": ind(_mediana(commits_por), "derivado:git"),
+            "arquivos_por_ms_mediana": ind(_mediana(arquivos_por), "derivado:git"),
+            "linhas_por_ms_mediana": ind(_mediana(linhas_por), "derivado:git"),
+            "duracao_ms_horas_mediana": ind(_mediana(duracao_por), "derivado:git",
+                                            nota=f"n={len(duracao_por)} MS com >1 commit"),
+            "lead_time_entre_ms_horas_mediana": ind(_mediana(lead_times), "derivado:git"),
+            "correcoes_apos_entrega": ind(correcoes_pos_fechamento, "derivado:git",
+                                          nota="proxy de retrabalho"),
+            "testes_por_ms_mediana": ind(_mediana(testes), "derivado:archives",
+                                         cobertura=f"{com_campo}/{len(archives)}"),
+        },
+        "nao_instrumentado": [
+            "token_por_ms — o harness não expõe consumo ao processo",
+            "suite_segundos — depende do runner do projeto; informe com --suite-segundos",
+            "ms_estacionadas e tempo_de_fila — exige a triagem em classes, que ainda não existe",
+        ],
+    }
+    if args.suite_segundos is not None:
+        registro["indicadores"]["suite_segundos"] = ind(args.suite_segundos, "reportado")
+
+    print(f"       repositório {raiz.name} · janela {registro['janela']['desde']} → {registro['janela']['ate']}")
+    for nome, d in registro["indicadores"].items():
+        v = d["valor"]
+        v = "—" if v is None else (f"{v:.1f}" if isinstance(v, float) else str(v))
+        extra = f"  [{d.get('cobertura') or d.get('nota') or d['origem']}]"
+        print(f"       {nome:38} {v:>9}{extra}")
+    print("       não instrumentado:")
+    for n in registro["nao_instrumentado"]:
+        print(f"         · {n}")
+
+    if args.write:
+        destino = raiz / P_METRICAS
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        with destino.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(registro, ensure_ascii=False) + "\n")
+        registrar_execucao(raiz, "metrics", "ok", {"ms": len(por_ms)})
+        print(f"OK     linha de base gravada em {P_METRICAS}")
+    else:
+        print("OK     modo relatório — nada foi escrito. Use --write para fixar a linha de base.")
+    return 0
+
+
 def cmd_doctor(args) -> int:
     """Divergência entre a metodologia deste projeto e o canon declarado.
 
@@ -767,6 +938,14 @@ def main(argv=None) -> int:
     u = sub.add_parser("update", help="confere/aplica versão nova a partir da origem")
     u.add_argument("--apply", action="store_true", help="baixa e aplica a última versão")
     u.set_defaults(fn=cmd_update)
+
+    m = sub.add_parser("metrics", help="linha de base derivada do histórico")
+    m.add_argument("--repo", help="repositório a medir (padrão: o projeto atual)")
+    m.add_argument("--desde", help="ref git inicial da janela (padrão: todo o histórico)")
+    m.add_argument("--suite-segundos", type=int, dest="suite_segundos",
+                   help="tempo da suíte completa, em segundos — valor reportado")
+    m.add_argument("--write", action="store_true", help="grava a linha de base")
+    m.set_defaults(fn=cmd_metrics)
 
     d = sub.add_parser("doctor", help="divergência entre o projeto e o canon")
     d.add_argument("--strict", action="store_true", help="divergência não declarada reprova")

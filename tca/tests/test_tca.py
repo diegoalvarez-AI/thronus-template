@@ -423,6 +423,87 @@ class TestUpdate(unittest.TestCase):
         self.assertEqual(tca.main(["update"]), 2)
 
 
+class TestMetrics(unittest.TestCase):
+    """Linha de base derivada de git — sem instrumentar nada no processo."""
+
+    @staticmethod
+    def _git(cwd, *args, **kw):
+        import subprocess
+        subprocess.run(["git", "-C", str(cwd), *args], check=True,
+                       capture_output=True, text=True, env=kw.get("env"))
+
+    def _commit(self, msg, arquivo, conteudo):
+        (self.dir / arquivo).parent.mkdir(parents=True, exist_ok=True)
+        (self.dir / arquivo).write_text(conteudo, encoding="utf-8")
+        self._git(self.dir, "add", arquivo)
+        self._git(self.dir, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", msg)
+
+    def setUp(self):
+        import os
+        self.dir = Path(tempfile.mkdtemp())
+        (self.dir / P_ARCHIVE).mkdir(parents=True)
+        (self.dir / P_INDEX).write_text('{"estado_da_trilha":{}}', encoding="utf-8")
+        self._git(self.dir, "init", "-q", "-b", "main")
+        self._commit("chore: base", "README.md", "x\n")
+        self._commit("feat(a): primeira [MS-001]", "a.py", "a\n")
+        self._commit("feat(b): segunda [MS-002]", "b.py", "b\n")
+        self._commit("fix(b): corrige a segunda [MS-002]", "b.py", "bb\n")
+        self._commit("docs: sem ms", "c.md", "c\n")
+        (self.dir / P_ARCHIVE / "ms001.json").write_text(
+            json.dumps({"ms": "MS-001", "testes": 7}), encoding="utf-8")
+        self._cwd = Path.cwd()
+        os.chdir(self.dir)
+
+    def tearDown(self):
+        import os
+        os.chdir(self._cwd)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _registro(self):
+        linha = (self.dir / tca.P_METRICAS).read_text(encoding="utf-8").strip().splitlines()[-1]
+        return json.loads(linha)["indicadores"]
+
+    def test_conta_apenas_commits_com_ms(self):
+        self.assertEqual(tca.main(["metrics", "--write"]), 0)
+        self.assertEqual(self._registro()["ms_entregues"]["valor"], 2)
+
+    def test_cobertura_de_archive_dimensiona_o_gap(self):
+        tca.main(["metrics", "--write"])
+        d = self._registro()["ms_com_archive_pct"]
+        self.assertEqual(d["valor"], 50.0, "1 de 2 MS tem archive")
+        self.assertIn("1/2", d["nota"])
+
+    def test_correcao_apos_entrega_e_contada(self):
+        tca.main(["metrics", "--write"])
+        self.assertEqual(self._registro()["correcoes_apos_entrega"]["valor"], 1)
+
+    def test_todo_indicador_declara_origem(self):
+        tca.main(["metrics", "--write"])
+        for nome, d in self._registro().items():
+            self.assertIn("origem", d, f"{nome} sem procedência")
+
+    def test_testes_reporta_cobertura_do_campo(self):
+        tca.main(["metrics", "--write"])
+        self.assertEqual(self._registro()["testes_por_ms_mediana"]["cobertura"], "1/1")
+
+    def test_modo_relatorio_nao_escreve(self):
+        self.assertEqual(tca.main(["metrics"]), 0)
+        self.assertFalse((self.dir / tca.P_METRICAS).exists())
+
+    def test_valor_reportado_e_marcado_como_tal(self):
+        tca.main(["metrics", "--write", "--suite-segundos", "93"])
+        d = self._registro()["suite_segundos"]
+        self.assertEqual((d["valor"], d["origem"]), (93, "reportado"))
+
+    def test_sem_ms_no_historico_avisa_em_vez_de_inventar(self):
+        self._git(self.dir, "checkout", "-q", "--orphan", "vazio")
+        self._git(self.dir, "rm", "-rqf", ".")
+        (self.dir / P_ARCHIVE).mkdir(parents=True, exist_ok=True)
+        (self.dir / P_INDEX).write_text('{"estado_da_trilha":{}}', encoding="utf-8")
+        self._commit("chore: nada", "z.md", "z\n")
+        self.assertEqual(tca.main(["metrics"]), 0)
+
+
 class TestPacote(unittest.TestCase):
     def test_manifesto_integro(self):
         self.assertEqual(tca.main(["verify-self"]), 0)
