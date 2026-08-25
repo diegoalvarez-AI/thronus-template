@@ -1,152 +1,255 @@
 # Discovery Thronus — Método PONTE
 
-> **Conteúdo canônico.** Método de campo para entrar em micro, pequena e média empresa de
-> baixa maturidade, mapear o processo que não existe documentado, medir onde está a perda,
-> decidir a natureza de cada intervenção e comprometer um programa de evolução.
+> **Conteúdo canônico.** Método de campo AI-First para entrar em micro, pequena e média
+> empresa de baixa maturidade, redesenhar o processo sob a premissa de inteligência barata,
+> **entregar valor durante o próprio Discovery**, e comprometer um programa de evolução.
 >
-> A saída **não é a especificação de um sistema**. É um **programa sequenciado de
-> intervenções heterogêneas** — eliminação, padronização, capacitação, integração, automação,
-> agente, painel, API, sistema — dentro da linha de serviços da Thronus.
->
-> Versão 3.0 · Agosto de 2026
+> Versão 4.0 · Agosto de 2026
 
 ---
 
-## 1. Âncoras metodológicas
+## 1. Fundamentação
 
-| Fase | Instrumento | Âncora |
+### 1.1 Por que AI-First muda a premissa, e não a caixa de ferramentas
+
+A melhoria de processo clássica é incremental: mapeia-se o fluxo, eliminam-se desperdícios,
+simplifica-se, integra-se, e só então automatiza-se o que sobrou. O método ESIA (Peppard &
+Rowland) descreve bem esse encadeamento, e ele pressupõe que **a forma do processo está certa
+e o que está errado é a execução**.
+
+Hammer mostrou que essa premissa falha quando surge capacidade nova: *"Don't automate,
+obliterate"* — automatizar um processo desenhado para uma restrição que não existe mais é
+tornar o erro mais rápido e mais caro. A pergunta certa não é como executar melhor o fluxo
+atual, mas **que fluxo faria sentido se a restrição tivesse caído**.
+
+Em AI-First a restrição que caiu é o **custo do trabalho cognitivo de rotina**. Ler, entender,
+classificar, extrair, redigir um primeiro rascunho, responder a partir de base conhecida,
+resumir, vigiar — tudo isso deixou de exigir uma pessoa por unidade de trabalho.
+
+Boa parte do processo de uma MPME existe **por causa** dessa restrição. A planilha de controle
+existe porque alguém precisava consolidar à mão. A etapa de triagem existe porque alguém
+precisava ler para decidir para onde mandar. O formulário existe porque a informação precisava
+chegar estruturada, já que ninguém teria tempo de interpretar texto livre.
+
+**Por isso o mapeamento AI-First produz o to-be no mesmo ato.** Mapear o as-is e depois, numa
+etapa separada, procurar onde caberia IA, é aplicar o método antigo com vocabulário novo.
+
+### 1.2 As oito capacidades que ficaram baratas
+
+Esta é a lente aplicada a cada atividade observada no campo. Não é lista de produtos: é a
+pergunta que se faz diante de cada passo do processo.
+
+| Capacidade | Atividade que ela dissolve |
+|---|---|
+| **Ler e entender texto livre** | alguém que lê e-mail, mensagem, PDF, formulário para saber o que é |
+| **Classificar e encaminhar** | triagem manual, fila decidida por pessoa |
+| **Extrair dado estruturado** | redigitação, preenchimento de planilha a partir de documento |
+| **Redigir primeiro rascunho** | proposta, resposta, relatório, ata escritos do zero |
+| **Responder de base conhecida** | consulta repetida a quem sabe; "pergunta pro fulano" |
+| **Resumir e consolidar** | relatório mensal montado à mão, reunião de status |
+| **Vigiar e detectar desvio** | conferência periódica, alguém que "dá uma olhada" |
+| **Conversar no lugar de formulário** | formulário que ninguém preenche, cadastro incompleto |
+
+Diante de cada atividade: **esta atividade existe porque uma dessas coisas custava caro?** Se
+sim, ela não é candidata a automação — é candidata a **deixar de existir na forma atual**.
+
+### 1.3 O que a lente não dissolve
+
+Julgamento com consequência, relacionamento, negociação, decisão sob ambiguidade e
+responsabilização. Essa é a fronteira que se **preserva deliberadamente** — e é o que a Thronus
+declara no seu posicionamento: automatizar tarefa, não cargo. O redesenho move pessoas para
+esse lado da fronteira; não as remove.
+
+---
+
+## 2. O ciclo
+
+O Discovery não é etapa única de porta de entrada. É ciclo que se repete a cada rodada de
+evolução do cliente, e o FMO reavalia a prontidão ao final de cada volta.
+
+```
+        ┌──────────────────────────────────────────────────────┐
+        │                                                      │
+   FMO ─┴─→ ONBOARDING → CAMPO → REDESENHO → VALOR EM VOO ─────┤
+                                      │            │           │
+                                      └→ PROGRAMA ─┴→ EXECUÇÃO ┘
+                                                        │
+                                                    MEDIÇÃO
+```
+
+Cada volta é mais barata que a anterior: o vocabulário do cliente já está registrado, o
+processo já está mapeado, e a equipe já passou por uma rodada de aculturamento.
+
+---
+
+## 3. Onboarding
+
+Antes do campo, e sem isto o campo não abre:
+
+| Item | Responsável | Por quê |
 |---|---|---|
-| Mapear o processo | **Gemba** — ir ver onde o trabalho acontece | Sistema Toyota de Produção |
-| Mapear o processo | **Domain Storytelling** — atores, objetos de trabalho, atividades | Hofer & Schwentner |
-| Delimitar o levantamento | **SIPOC** — fornecedor, entrada, processo, saída, cliente | Seis Sigma |
-| Medir a perda | **Mapa de Fluxo de Valor** — tempo de atravessamento *versus* tempo de processamento | Lean |
-| Decidir a intervenção | **ESIA** — eliminar, simplificar, integrar, automatizar, nesta ordem | Peppard & Rowland (1995) |
-| Sustentar a mudança | **ADKAR** — consciência, desejo, conhecimento, habilidade, reforço | Prosci |
-| Medir a capacitação | **Kirkpatrick** — reação, aprendizado, **comportamento**, resultado | Kirkpatrick |
-| Prontidão e não compensação | seis saídas do §4.6, banda, nível conservador, três gates | **FMO AI-First v4.1** |
-| Protocolo de portão | três estados, signatário nomeado, não compensação | **ÂNCORA** |
-| Especificar o que vira software | EARS · COSMIC ISO/IEC 19761 · ISO/IEC 25010:2023 · ISO/IEC/IEEE 29148 | ver `DOCUMENTO_DE_ENTRADA.md` |
+| Patrocinador nomeado com poder de decidir escopo | cliente | decisão que demora trava o campo inteiro |
+| Pessoas que **executam** o processo liberadas para as sessões | cliente | quem descreve de cima descreve o que deveria ser |
+| Acesso de leitura aos sistemas e planilhas em uso | cliente | o processo real está nos artefatos, não no relato |
+| Autorização para gravar as sessões | cliente | a transcrição é o insumo do trabalho assistido (§6) |
+| Termo de tratamento de dados e confidencialidade | ambos | dado de cliente do cliente aparece no campo |
+| Agenda fechada das sessões de campo | ambos | remarcação é a causa mais comum de estouro de prazo |
 
----
-
-## 2. Posição na cadeia
-
-```
-Etapa 0 — Diagnóstico AI-First (FMO)   prontidão do cliente, oportunidades identificadas
-        ↓  seis saídas do §4.6
-DISCOVERY (PONTE)                       campo → programa de intervenções comprometido
-        ↓  Programa · Documento de Entrada (só para o que vira software)
-Etapas 1 a 4                            automação · operações · produto · growth
-```
-
-O FMO diz **onde a empresa está**. O Discovery diz **o que fazer, em que ordem, de que
-natureza, a que custo**. Só parte disso é software — e essa parte segue para a TCA.
-
----
-
-## 3. Premissa de campo
-
-Em MPME de baixa maturidade, o processo **não existe documentado e não é descrito com
-fidelidade por quem não o executa**. Quem descreve de cima descreve o processo como deveria
-ser. Por isso o levantamento é presencial, com quem faz, e o registro é do que se observou —
-não do que se afirmou. É a mesma regra do FMO: evidência atual acima de intenção declarada.
-
-Infraestrutura ausente e governança fraca não são obstáculo ao levantamento — são **achado**.
-Aparecem como pré-condição no programa, com dono e prazo, nunca como escopo nosso silencioso.
+Onboarding incompleto é **pré-condição com dono e prazo**, nunca motivo para começar mesmo
+assim e absorver o atraso.
 
 ---
 
 ## 4. As cinco fases
 
-### P — Processo mapeado
+### P — Processo mapeado, com a lente já aplicada
 
-Delimitar com **SIPOC** em uma página: quem fornece, o que entra, que processo, o que sai,
-quem recebe. Serve para saber onde o levantamento começa e termina, e cabe na conversa com o
-dono do negócio.
+Delimitar com **SIPOC** em uma página. Ir a campo — **Gemba** — e observar o trabalho onde ele
+acontece, com quem o executa. Registrar em **Domain Storytelling**: atores, objetos de trabalho
+e atividades, em linguagem pictográfica e vocabulário do cliente, que funciona com quem não
+fala notação de processo.
 
-Ir a campo — **Gemba**. Observar o trabalho onde ele acontece, com quem o executa.
+**Em cada atividade registrada, aplicar a lente do §1.2 na hora.** A pergunta é feita na
+sessão, com quem faz: *"você faz isso porque alguém precisa ler e decidir? o que aconteceria se
+isso chegasse já classificado?"* A reação de quem executa é evidência — e é também o começo do
+aculturamento, porque a pessoa vê a possibilidade em cima do próprio trabalho.
 
-Registrar com **Domain Storytelling**: atores, objetos de trabalho e atividades, em linguagem
-pictográfica e vocabulário do cliente. Funciona com quem não fala notação de processo, que é a
-regra em MPME. A história é lida de volta para quem a executa, e a correção dele é a validação.
-
-Saída: processo **como ele é hoje**, glossário do vocabulário do cliente, sistemas e planilhas
-realmente em uso, e quem depende de quem.
+Saída: **as-is observado** e **to-be candidato**, lado a lado, no mesmo registro, com o
+vocabulário do cliente e os sistemas realmente em uso.
 
 ### O — Oportunidade medida
 
-**Mapa de fluxo de valor** sobre o processo mapeado: tempo de atravessamento contra tempo de
-processamento, espera, retrabalho, redigitação, aprovação parada, informação transportada à mão.
+**Mapa de fluxo de valor** sobre o as-is: tempo de atravessamento contra tempo de
+processamento, espera, retrabalho, redigitação, aprovação parada.
 
-**Oportunidade sem número não é oportunidade.** Onde não há dado — que é o caso normal —
-mede-se por amostragem no campo e declara-se o método e o tamanho da amostra. A medida aqui é
-o **baseline** do plano de validação e o que provará, depois, que a entrega gerou resultado.
+A diferença entre as-is e to-be é a oportunidade, e ela é declarada em um dos **quatro eixos de
+valor** (§7). **Oportunidade sem número não é oportunidade.** Onde não há dado — o caso normal
+em baixa maturidade — mede-se por amostragem no campo, declarando método e tamanho da amostra.
+Esse número é o **baseline** que depois provará o resultado.
 
 ### N — Natureza da intervenção decidida
 
-Cada oportunidade recebe uma natureza, na ordem **ESIA** estendida, e a ordem é obrigatória:
+Para cada oportunidade, a pergunta em ordem:
 
-| Ordem | Natureza | Pergunta |
+| Ordem | Pergunta | Resultado |
 |---|---|---|
-| 1 | **Eliminar** | esta atividade precisa existir? |
-| 2 | **Simplificar / padronizar** | o que sobrou pode ser mais simples e ter um procedimento único? |
-| 3 | **Integrar** | o que já existe pode conversar, dispensando redigitação? |
-| 4 | **Automatizar** | a rotina estável pode rodar sozinha, sem IA? |
-| 5 | **Assistir com IA** | o que resta exige julgamento que um agente pode apoiar? |
-| 6 | **Construir** | falta capacidade que não existe pronta no mercado? |
+| 1 | Esta atividade existe por causa de uma restrição que caiu? | **dissolver** — deixa de existir na forma atual |
+| 2 | O resultado pode ser produzido de outra maneira? | **redesenhar** o fluxo, não melhorar o passo |
+| 3 | O que sobrou é estável e sem julgamento? | **automatizar** sem IA — mais barato e mais previsível |
+| 4 | O que sobrou exige interpretação ou linguagem? | **assistir com IA** |
+| 5 | Falta capacidade que não existe pronta? | **construir** |
+| — | A equipe saberá operar o que ficou? | **capacitar** — transversal, sempre |
 
-Transversal a todas: **Capacitar**. Em baixa maturidade, intervenção que a equipe não sabe
-operar não se sustenta — e volta como retrabalho nosso.
+A diferença para o método incremental está nos passos 1 e 2: eles vêm **antes** de qualquer
+decisão de ferramenta. Automatizar sem passar por eles é obliterar nada e pagar mais caro.
 
-**Não se automatiza o que deveria ser eliminado.** Pular a ordem é o erro que transforma
-processo ruim em processo ruim mais caro e mais rápido. Saltar uma etapa exige justificativa
-escrita no programa.
-
-O catálogo de naturezas, com o artefato mínimo de cada uma, está em `INTERVENCOES.md`.
+O catálogo de naturezas, com artefato mínimo de cada uma, está em `INTERVENCOES.md`.
 
 ### T — Trilha sequenciada
 
-Ordenar as intervenções em um **programa**, respeitando dependências que não se negociam:
+Programa ordenado por dependência, não por valor de contrato:
 
 - não se mede o que não está definido;
 - não se automatiza o que não está estável;
 - não se constrói sobre dado que não existe;
-- não se entrega ao usuário o que ele não sabe operar.
+- não se entrega o que a equipe não sabe operar.
 
-As pré-condições do mapa do FMO entram na trilha como itens com dono, prazo e consequência.
-A trilha atravessa as etapas do portfólio: um mesmo programa pode ter item de Etapa 1 e de
-Etapa 3, com a ordem determinada pela dependência, não pelo valor do contrato.
-
-**Adoção é item de trilha, não torcida.** Onde Receptividade ou Qualificação estão baixas no
-FMO, o programa carrega itens de **ADKAR** — consciência e desejo antes de conhecimento e
-habilidade — e a capacitação é avaliada no **nível de comportamento de Kirkpatrick**: mudou o
-que a pessoa faz, não se ela gostou do treinamento.
+Adoção é item de trilha. Onde Receptividade ou Qualificação estão baixas no FMO, o programa
+carrega itens de **ADKAR** — consciência e desejo antes de conhecimento e habilidade — e a
+capacitação se avalia no **nível de comportamento de Kirkpatrick**: mudou o que a pessoa faz,
+não se ela gostou do treinamento.
 
 ### E — Entrada comprometida
 
-Cada item da trilha recebe o **artefato mínimo da sua natureza** (`INTERVENCOES.md`). Os itens
-de natureza *Construir* — e as automações, agentes, integrações e painéis que virarem software —
-recebem o **Documento de Entrada**, que parametriza a TCA.
-
-Passar pelos portões (§5), colher assinatura, emitir o **Programa** (`PROGRAMA.md`).
+Artefato mínimo por natureza. Portões (§8), assinatura, e emissão do **Programa**.
 
 ---
 
-## 5. Portões não compensatórios
+## 5. Valor em voo — o Discovery não entrega papel
 
-Protocolo do FMO §4.5 e do `tca gate`: três estados, mudança privativa de responsável nomeado,
-com data, evidência consultada e justificativa.
+**Regra:** todo Discovery entrega, **durante o próprio Discovery**, de uma a três intervenções
+funcionando. Não protótipo, não demonstração: coisa em uso.
+
+É possível porque as capacidades do §1.2 ficaram baratas. Uma triagem que classifica e
+encaminha, um assistente que responde do manual da empresa, uma extração que elimina
+redigitação — cada uma dessas custa dias, não meses, e ataca dor que a fase O já mediu.
+
+Critérios do que vira valor em voo:
+
+| Critério | Por quê |
+|---|---|
+| Ataca dor já medida na fase O | tem baseline, então tem prova |
+| Não depende de pré-condição pendente | não pode ficar parado esperando o cliente |
+| Reversível e de raio pequeno | erro no início do relacionamento custa caro |
+| Operável pela equipe do cliente com a capacitação embutida | senão volta como suporte nosso |
+
+**Efeito comercial:** o cliente vê retorno antes de assinar o programa, e o Discovery deixa de
+ser custo de entrada para ser a primeira entrega. **Efeito metodológico:** a intervenção em uso
+valida ou refuta o to-be no campo, com dado real, antes de o programa inteiro ser comprometido.
+
+---
+
+## 6. Como a IA executa o Discovery
+
+É o que permite a uma equipe enxuta rodar Discovery em escala. O agente faz o trabalho de
+volume; a pessoa observa, valida e decide.
+
+| Etapa | O que a IA faz | O que continua sendo humano |
+|---|---|---|
+| Sessão de campo | transcreve e marca falantes | observar, perguntar, ler a linguagem não verbal |
+| Após a sessão | reconstrói a narrativa em Domain Storytelling a partir da transcrição | validar o registro com quem executa |
+| Consolidação | **cruza relatos e aponta contradições** entre pessoas que descrevem o mesmo processo | decidir qual versão é a real, indo ver |
+| Vocabulário | extrai glossário e sinônimos em circulação | escolher o termo canônico |
+| Oportunidade | aplica a lente do §1.2 a cada atividade e propõe candidatos | julgar cabimento, medir, priorizar |
+| Medição | calcula tempos e agrega a amostra | definir o método de amostragem |
+| Artefatos | redige as primeiras versões de todos os documentos | assinar os portões |
+
+**Duas regras invioláveis.** A IA nunca fecha portão: portão tem signatário humano nomeado
+(§8). E toda afirmação nos artefatos carrega procedência — `[observado]`, `[relatado]`,
+`[inferido pela IA]` — porque narrativa reconstruída de transcrição é inferência até que quem
+executa a confirme.
+
+**Efeito colateral deliberado:** a equipe do cliente vê a IA sendo usada no trabalho da própria
+consultoria. É aculturamento por demonstração, e vale mais que treinamento sobre o assunto.
+
+---
+
+## 7. Mensuração — quatro eixos de valor
+
+Toda oportunidade declara **um** eixo principal, com baseline, alvo, prazo e quem mede.
+
+| Eixo | Medida | Exemplo de baseline |
+|---|---|---|
+| **Produtividade** | tempo ou volume por pessoa | horas por semana consolidando planilha |
+| **Ineficiência corrigida** | erro, retrabalho, perda de prazo | percentual de pedidos com redigitação errada |
+| **Custo** | despesa direta ou custo de oportunidade | custo mensal de licença redundante, hora extra recorrente |
+| **Faturamento** | receita, conversão, retenção | percentual de leads sem resposta em 24h |
+
+Regras: o baseline é medido na fase O, **antes** da intervenção — reconstruir baseline depois é
+narrativa. A verificação tem data e dono, e entra no programa como item. E o eixo faturamento
+exige a cadeia causal escrita, porque atribuição de receita a uma intervenção é a mais fácil de
+inflar e a que mais destrói confiança quando não se sustenta.
+
+O mesmo baseline alimenta o plano de validação do FMO e o case da próxima venda.
+
+---
+
+## 8. Portões não compensatórios
+
+Protocolo do FMO §4.5 e do `tca gate`: três estados, mudança privativa de responsável **humano**
+nomeado, com data, evidência consultada e justificativa.
 
 | Portão | Pergunta de decisão |
 |---|---|
-| **G1 — Processo compreendido** | O processo foi observado no campo, registrado em linguagem do cliente e **validado por quem o executa**. |
-| **G2 — Perda medida** | Cada oportunidade tem número, com método e amostra declarados, e o baseline está registrado. |
-| **G3 — Natureza justificada** | Cada intervenção declara a sua natureza, e todo salto na ordem ESIA tem justificativa escrita. |
+| **G1 — Processo compreendido** | O processo foi observado no campo e **validado por quem o executa**; contradições entre relatos foram resolvidas indo ver. |
+| **G2 — Perda medida** | Cada oportunidade tem número, eixo de valor, método e amostra declarados, e baseline registrado. |
+| **G3 — Redesenho justificado** | Cada intervenção passou pelas perguntas 1 e 2 do §4-N antes da escolha de ferramenta, e o que se preserva por exigir julgamento humano está declarado. |
 | **G4 — Pré-condições assumidas** | Cada pré-condição tem dono **do lado do cliente**, prazo e consequência declarada. |
-| **G5 — Programa dimensionado** | Cada item tem unidade de dimensionamento da sua natureza, banda de esforço e compromisso no extremo conservador. |
+| **G5 — Programa dimensionado** | Cada item tem unidade da sua natureza, banda de esforço e compromisso no extremo conservador. |
+| **G6 — Valor entregue** | Ao menos uma intervenção está **em uso** e a sua medida contra o baseline está registrada. |
 
-**Não compensação.** Perda bem medida não compensa processo mal compreendido. Precisão de
-estimativa não compensa natureza mal escolhida.
+**Não compensação.** Perda bem medida não compensa processo mal compreendido. Documento
+completo não compensa valor não entregue.
 
 | Estado | Condição | Consequência |
 |---|---|---|
@@ -155,49 +258,27 @@ estimativa não compensa natureza mal escolhida.
 | **Não atendido** | qualquer elemento essencial insatisfeito | compromisso obstruído, sem compensação |
 
 Exceção só por instância superior à do avaliador, com fundamento, responsável e critério de
-interrupção registrados. A exceção é documentada e **não altera o resultado**, que permanece
-como não atendido.
+interrupção registrados. Não altera o resultado, que permanece como não atendido.
 
 ---
 
-## 6. Pré-condição do cliente não é escopo nosso
+## 9. Pré-condição do cliente não é escopo nosso
 
-Baixa maturidade produz pré-condições: dado a organizar, papel a definir, acesso a conceder,
-decisão a tomar. Absorver isso sem precificar é o mecanismo pelo qual o prazo estoura — a
-entrega fica parada esperando algo que ninguém assumiu.
-
-Cada pré-condição recebe um de três destinos, e só três:
-
-1. **Obrigação do cliente** — dono nomeado, prazo, consequência declarada do descumprimento.
-2. **Item de programa precificado** — a Thronus faz, e está no preço e no prazo.
-3. **Exclusão declarada** — não será feito, e a consequência para o resultado está escrita.
-
-Pré-condição sem destino reprova G4.
+Cada pré-condição recebe um de três destinos, e só três: **obrigação do cliente** com dono,
+prazo e consequência · **item de programa precificado** · **exclusão declarada** com a
+consequência escrita. Sem destino, reprova G4.
 
 ---
 
-## 7. Profundidade proporcional
+## 10. Invariantes
 
-O Discovery não tem tamanho fixo. Profundidade proporcional ao nível de garantia e ao tamanho
-do programa, no princípio do DO-178C: **a criticidade classificada determina quais objetivos se
-aplicam**. Rigor uniforme é desperdício num extremo e negligência no outro.
-
-**O critério de parada é a largura da banda, não a completude do documento.** Levanta-se até
-poder comprometer preço e prazo no extremo conservador. Depois disso, continuar consome margem
-para reduzir incerteza que já não muda a decisão.
-
-Seção sem consumidor declarado não se produz.
-
----
-
-## 8. Invariantes
-
+- **AI-First é premissa de redesenho, não etapa final.** O mapeamento produz o to-be no mesmo ato.
+- **Antes de escolher ferramenta, perguntar se a atividade ainda precisa existir.**
 - **O processo é observado, não relatado.** Validação é de quem executa.
-- **Oportunidade sem número não é oportunidade.**
-- **A ordem ESIA é obrigatória.** Não se automatiza o que deveria ser eliminado.
-- **Capacitação é item de trilha e se mede em comportamento**, não em satisfação.
-- **Maturidade não estima tamanho.** Informa risco e pré-condição.
-- **Pré-condição do cliente tem dono nomeado, prazo e consequência.**
+- **Oportunidade sem número e sem eixo de valor não é oportunidade.**
+- **Todo Discovery entrega coisa em uso**, não só documento.
+- **A IA redige e cruza; a pessoa observa, decide e assina.** Portão não tem signatário máquina.
+- **Toda afirmação carrega procedência**: observado, relatado ou inferido.
+- **Julgamento, relacionamento e responsabilização se preservam** — automatiza-se tarefa, não cargo.
+- **Capacitação se mede em comportamento**, não em satisfação.
 - **Compromisso no extremo conservador da banda** (FMO §4.3).
-- **Portão não compensatório.**
-- **Nem toda intervenção é software.** A que for segue para a TCA; as demais têm artefato próprio.

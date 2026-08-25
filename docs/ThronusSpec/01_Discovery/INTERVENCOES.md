@@ -3,9 +3,11 @@
 > Cada oportunidade da fase O recebe uma **natureza** na fase N. A natureza determina o
 > artefato mínimo, a unidade de dimensionamento, o critério de sucesso e o destino.
 >
-> Ordem ESIA obrigatória: eliminar → simplificar/padronizar → integrar → automatizar →
-> assistir com IA → construir. Capacitar é transversal. Salto na ordem exige justificativa
-> escrita no Programa.
+> **A escolha da natureza vem depois das perguntas 1 e 2 do `METODO.md` §4-N**: a atividade
+> ainda precisa existir, e o resultado pode ser produzido de outra maneira. Escolher ferramenta
+> antes disso é automatizar um processo desenhado para uma restrição que já caiu.
+>
+> Capacitar é transversal a todas. Dissolver é o resultado preferido, não o último recurso.
 
 ---
 
@@ -13,7 +15,8 @@
 
 | # | Natureza | Etapa | Unidade de dimensionamento | Vai para a TCA? |
 |---|---|---|---|---|
-| 1 | Eliminar atividade | — | atividades removidas | não |
+| 0 | **Dissolver atividade** | — | atividades que deixam de existir | não |
+| 1 | Eliminar desperdício residual | — | atividades removidas | não |
 | 2 | Padronizar procedimento | — | procedimentos escritos | não |
 | 3 | Capacitar, mentorar, aculturar | — | turmas × comportamentos-alvo | não |
 | 4 | Integrar sistemas existentes | 1 | pares origem-destino × campos | **sim**, quando há código |
@@ -33,7 +36,18 @@ critério de aceite e evidência.
 
 ## 2. Artefato mínimo por natureza
 
-### 1 · Eliminar atividade
+### 0 · Dissolver atividade
+**Quando cabe:** a atividade existe porque ler, classificar, extrair, redigir, responder,
+resumir ou vigiar custava caro — e não custa mais (`METODO.md` §1.2). É o resultado **preferido**
+do redesenho AI-First, e o mais barato de todos.
+**Artefato:** atividade nomeada · qual restrição a justificava · qual capacidade a dissolve ·
+o que passa a acontecer no lugar · o que a pessoa liberada passa a fazer.
+**Sucesso:** o tempo de atravessamento cai, nenhuma saída do processo se perde, e a pessoa
+está do lado do julgamento e do relacionamento.
+**Regra:** dissolver antes de automatizar. Automatizar atividade dissolvível é pagar para
+manter de pé o que deveria cair.
+
+### 1 · Eliminar desperdício residual
 **Quando cabe:** a atividade não agrega valor ao cliente do processo, ou existe só para
 compensar falha de outra etapa.
 **Artefato:** atividade nomeada · por que existe hoje · o que se perde ao removê-la · quem
@@ -120,5 +134,9 @@ política de depreciação, limite por consumidor.
 - **Toda intervenção tem critério de sucesso verificável**, ligado ao baseline da fase O.
 - **Toda intervenção declara o que acontece se não for feita** — é o que sustenta a prioridade.
 - **Intervenção que a equipe não sabe operar carrega item de capacitação**, ou não se entrega.
-- **Nenhuma intervenção de natureza 4 a 11 se aprova com a natureza anterior pendente** sem
-  justificativa escrita. É a ordem ESIA, e é o que impede automatizar o caos.
+- **Nenhuma intervenção de natureza 4 a 11 se aprova sem que as perguntas 1 e 2 do
+  `METODO.md` §4-N tenham sido respondidas por escrito.** É o que impede automatizar o caos, e
+  o que impede pagar por ferramenta para sustentar atividade que deveria ter sido dissolvida.
+- **Toda intervenção declara o seu eixo de valor** — produtividade, ineficiência, custo ou
+  faturamento — com baseline medido na fase O (`METODO.md` §7).
+- **Toda intervenção declara se é candidata a valor em voo** (`METODO.md` §5).
