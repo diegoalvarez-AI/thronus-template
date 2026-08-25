@@ -17,7 +17,7 @@ Comandos:
   tca diff [--cached]            snapshot-diff bidirecional contra a spec
   tca trace [--impacto A]        índice requisito ↔ teste ↔ commit
   tca sev [ID | --listar]        registro canônico de severidade
-  tca gate --achados ID,...      estado do portão sob não compensação
+  tca gate [--classe C] [--assinar N]   estado do portão sob não compensação
   tca selfcheck                  a verificação está de pé?
   tca canon [--write]            integridade do conteúdo metodológico
   tca doctor [--strict]          divergência entre o projeto e o canon
@@ -165,6 +165,20 @@ P_OVERRIDES = "tca-overrides.json"
 # sem isso, quem edita um skill e roda `tca canon --write` fica verde, porque o
 # canon guarda a metodologia e nada guardaria o canon.
 P_LOCK = "tca.lock.json"
+
+# Autorização, não execução: quem PODE assinar cada portão, decidido antes.
+# Decisão tomada sob pressão é decisão viciada — ÂNCORA §2.4 sobre o viés de
+# quem conduz a avaliação ter interesse na aprovação.
+P_SIGNATARIOS = "tca.signatarios.json"
+
+# O tipo do Conventional Commit já classifica a mudança, e a classe determina o
+# que o portão exige. Nem toda mudança é mudança de requisito.
+CLASSES = {
+    "fix": "fix", "hotfix": "fix",
+    "feat": "feat",
+    "refactor": "tecnico", "perf": "tecnico", "chore": "tecnico",
+    "build": "tecnico", "ci": "tecnico", "docs": "tecnico", "test": "tecnico",
+}
 
 # Ajuste por máquina. Derivado das métricas medidas NESTE ambiente, gerado e
 # nunca editado. Não é versionado: é estado derivado e específico da máquina —
@@ -1383,6 +1397,22 @@ def cmd_sev(args) -> int:
     return 0
 
 
+def classe_do_commit(mensagem: str) -> str | None:
+    """Deriva a classe do tipo do Conventional Commit — que o projeto já usa."""
+    m = re.match(r"^([a-z]+)(\(|!|:)", mensagem.strip())
+    return CLASSES.get(m.group(1)) if m else None
+
+
+def _autorizados(raiz: Path, portao: str | None) -> list[str] | None:
+    f = raiz / P_SIGNATARIOS
+    if not f.exists():
+        return None
+    d = ler_json(f)
+    if portao and portao in d.get("portoes", {}):
+        return d["portoes"][portao]
+    return d.get("padrao", [])
+
+
 def cmd_gate(args) -> int:
     """Estado do portão sob a regra de não compensação.
 
@@ -1440,6 +1470,42 @@ def cmd_gate(args) -> int:
         else:
             informativos.append(a)
 
+    # ── classe da mudança: nem toda mudança é mudança de requisito ──
+    classe = args.classe
+    if classe and classe not in ("fix", "feat", "tecnico"):
+        raise TcaError(f"classe {classe!r} inválida. Use: fix | feat | tecnico")
+    if classe:
+        regras = ler_json(SEVERIDADES).get("_classes", {}).get(classe, {})
+        dispensados = [a for a in achados if a in regras.get("dispensa", [])]
+        if dispensados:
+            print(f"       classe {classe}: dispensa {', '.join(dispensados)} — "
+                  f"{regras.get('porque', '')}")
+            achados = [a for a in achados if a not in dispensados]
+            bloqueantes = [a for a in bloqueantes if a not in dispensados]
+            residuais_ok = [a for a in residuais_ok if a not in dispensados]
+            residuais_sem_dono = [a for a in residuais_sem_dono if a not in dispensados]
+            informativos = [a for a in informativos if a not in dispensados]
+
+    # ── signatário: autorização declarada antes, ato registrado agora ──
+    try:
+        raiz_sig = achar_raiz(Path.cwd())
+    except TcaError:
+        raiz_sig = None
+    if args.assinar:
+        autoriz = _autorizados(raiz_sig, args.portao) if raiz_sig else None
+        if autoriz is None:
+            print(f"AVISO  {P_SIGNATARIOS} ausente — assinatura registrada sem "
+                  "conferência de autorização")
+        elif args.assinar not in autoriz:
+            _achado("SEV-033")
+            bloqueantes.append("SEV-033")
+            print(f"BLOQUEIA   SEV-033  {args.assinar!r} não autorizado para "
+                  f"{args.portao or 'padrão'} — autorizados: {', '.join(autoriz) or 'nenhum'}")
+    elif args.exigir_assinatura:
+        _achado("SEV-032")
+        bloqueantes.append("SEV-032")
+        print("BLOQUEIA   SEV-032  portão sem signatário identificado")
+
     if bloqueantes or residuais_sem_dono:
         estado = "NAO_ATENDIDO"
     elif residuais_ok:
@@ -1458,13 +1524,19 @@ def cmd_gate(args) -> int:
 
     try:
         raiz = achar_raiz(Path.cwd())
+        # A assinatura vincula-se ao QUE foi aprovado: assinatura sem conteúdo
+        # não vincula nada.
+        conteudo = _git(raiz, "rev-parse", "HEAD") or "sem-ref"
         registrar_execucao(raiz, "gate", estado.lower(), {
             "portao": args.portao, "achados": achados, "estado": estado,
+            "classe": classe, "signatario": args.assinar, "ref_aprovada": conteudo,
             "bloqueantes": len(bloqueantes), "residuais": len(residuais_ok)})
     except TcaError:
         pass
 
     rotulo = {"ATENDIDO": "OK", "CONDICIONADO": "COND", "NAO_ATENDIDO": "FALHA"}[estado]
+    if args.assinar and estado != "NAO_ATENDIDO":
+        print(f"       assinado por {args.assinar}")
     print(f"{rotulo:<6} portão {args.portao or '—'} · {estado} — "
           f"{len(bloqueantes)} bloqueantes · {len(residuais_ok)} pendências acompanhadas · "
           f"{len(informativos)} notas")
@@ -1886,6 +1958,12 @@ def main(argv=None) -> int:
     gt.add_argument("--achados", help="identificadores separados por vírgula")
     gt.add_argument("--de", help="executa verificações e colhe os achados: "
                                  "diff,trace,selfcheck,doctor")
+    gt.add_argument("--classe", help="fix | feat | tecnico — nem toda mudança é "
+                                     "mudança de requisito")
+    gt.add_argument("--assinar", help="nome de quem assina; conferido contra "
+                                      f"{P_SIGNATARIOS}")
+    gt.add_argument("--exigir-assinatura", action="store_true", dest="exigir_assinatura",
+                    help="portão sem signatário identificado reprova")
     gt.add_argument("--pendencia", action="append",
                     help="SEV-NNN=Responsável — nomeia o dono de uma pendência residual")
     gt.set_defaults(fn=cmd_gate)

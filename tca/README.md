@@ -155,6 +155,14 @@ Calcula o estado do portão sob **não compensação**, nos três estados do ÂN
 em identificadores do registro — o portão deixa de depender de alguém converter código de
 saída em achado à mão. `--achados` cobre o que ainda depende de revisor, e os dois somam.
 
+`--classe fix|feat|tecnico` aplica as regras da classe: correção dispensa cobertura de
+requisito e exige teste de regressão; nova capacidade admite a emenda como pendência
+acompanhada; mudança técnica dispensa ambos. O tipo do Conventional Commit já dá a classe.
+
+`--assinar Nome` confere contra `tca.signatarios.json` — autorização declarada antes,
+ato registrado agora, com a referência do que foi aprovado. `--exigir-assinatura` reprova
+portão sem signatário.
+
 Três propriedades que, juntas, são a não compensação:
 
 1. **Bloqueante não é neutralizado.** Desempenho em outro critério não compensa condição

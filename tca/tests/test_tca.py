@@ -431,6 +431,75 @@ class TestSeveridadeEGate(Base):
         self.assertEqual(tca.main(["gate", "--achados", "SEV-025", "--de", "doctor"]), 1)
         self.assertIn("SEV-004", tca.ACHADOS, "achado colhido do doctor")
 
+    # ── classe da mudança ──
+
+    def test_classe_deriva_do_tipo_do_commit(self):
+        self.assertEqual(tca.classe_do_commit("fix(auth): corrige [MS-021]"), "fix")
+        self.assertEqual(tca.classe_do_commit("feat(turma): cadastro"), "feat")
+        self.assertEqual(tca.classe_do_commit("refactor: extrai helper"), "tecnico")
+        self.assertEqual(tca.classe_do_commit("chore(deps): bump"), "tecnico")
+        self.assertIsNone(tca.classe_do_commit("mensagem solta"))
+
+    def test_correcao_dispensa_requisito_e_exige_teste(self):
+        """O requisito já existe; o que faltava era teste."""
+        tca.ACHADOS.clear()
+        self.assertEqual(
+            tca.main(["gate", "--classe", "fix", "--achados", "SEV-014"]), 0,
+            "cobertura de requisito não se aplica a correção")
+        self.assertEqual(
+            tca.main(["gate", "--classe", "fix", "--achados", "SEV-029"]), 1,
+            "correção sem teste de regressão bloqueia")
+
+    def test_nova_capacidade_condiciona_em_vez_de_bloquear(self):
+        """Refinamento não pode parar em documentação: emenda vira pendência."""
+        self.assertEqual(
+            tca.main(["gate", "--classe", "feat", "--achados", "SEV-030",
+                      "--pendencia", "SEV-030=Diego Alvarez"]), 0)
+        self.assertEqual(tca.main(["gate", "--classe", "feat", "--achados", "SEV-030"]), 1,
+                         "sem dono, a emenda não é pendência acompanhada")
+
+    def test_mudanca_tecnica_dispensa_requisito(self):
+        self.assertEqual(
+            tca.main(["gate", "--classe", "tecnico", "--achados", "SEV-014,SEV-029"]), 0)
+
+    def test_classe_invalida_e_erro(self):
+        self.assertEqual(tca.main(["gate", "--classe", "melhoria"]), 2)
+
+    # ── signatário ──
+
+    def _autoriza(self, **portoes):
+        (self.raiz / tca.P_SIGNATARIOS).write_text(
+            json.dumps({"padrao": ["Diego Alvarez"], "portoes": portoes}), encoding="utf-8")
+
+    def test_signatario_autorizado_assina(self):
+        self._autoriza(COMMIT=["Diego Alvarez"])
+        self.assertEqual(tca.main(["gate", "--portao", "COMMIT",
+                                   "--assinar", "Diego Alvarez"]), 0)
+
+    def test_signatario_nao_autorizado_bloqueia(self):
+        """Autodesignação no momento da aprovação é o viés que o método restringe."""
+        self._autoriza(COMMIT=["Diego Alvarez"])
+        tca.ACHADOS.clear()
+        self.assertEqual(tca.main(["gate", "--portao", "COMMIT", "--assinar", "Fulano"]), 1)
+        self.assertIn("SEV-033", tca.ACHADOS)
+
+    def test_cai_no_padrao_quando_o_portao_nao_e_declarado(self):
+        self._autoriza(RELEASE=["Bernardo"])
+        self.assertEqual(tca.main(["gate", "--portao", "PLAN",
+                                   "--assinar", "Diego Alvarez"]), 0)
+
+    def test_exigir_assinatura_sem_signatario_bloqueia(self):
+        self._autoriza(COMMIT=["Diego Alvarez"])
+        self.assertEqual(tca.main(["gate", "--portao", "COMMIT", "--exigir-assinatura"]), 1)
+
+    def test_assinatura_vincula_se_ao_que_foi_aprovado(self):
+        """Assinatura sem conteúdo não vincula nada."""
+        self._autoriza(COMMIT=["Diego Alvarez"])
+        tca.main(["gate", "--portao", "COMMIT", "--assinar", "Diego Alvarez"])
+        reg = json.loads((self.raiz / P_EXEC).read_text(encoding="utf-8").strip().splitlines()[-1])
+        self.assertEqual(reg["detalhes"]["signatario"], "Diego Alvarez")
+        self.assertIn("ref_aprovada", reg["detalhes"])
+
     def test_gate_emite_evidencia(self):
         tca.main(["gate", "--portao", "COMMIT", "--achados", "SEV-025"])
         reg = json.loads((self.raiz / P_EXEC).read_text(encoding="utf-8").strip().splitlines()[-1])

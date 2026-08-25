@@ -201,6 +201,43 @@ propriedades, que juntas são a não compensação:
 3. Achado fora do registro é **erro**, não julgamento no momento do portão. Declarar a
    linha é decisão de método, tomada antes e por escrito.
 
+### Classe da mudança
+
+**Nem toda mudança é mudança de requisito.** Exigir requisito declarado para toda
+intervenção criaria burocracia onde o processo precisa de velocidade — correções e ajustes
+pontuais chegam por prompt e não podem parar em documentação.
+
+O tipo do Conventional Commit, que já é invariante, **já classifica**:
+
+| Tipo | Classe | O que o portão exige |
+|---|---|---|
+| `fix` `hotfix` | correção | **teste que reproduza o defeito**; dispensa cobertura de requisito, porque o requisito já existe |
+| `feat` | nova capacidade | requisito declarado; a emenda pode vir depois, **com dono** → CONDICIONADO |
+| `refactor` `perf` `chore` `build` `ci` `docs` `test` | técnica | nada de requisito |
+
+O `fix` não fica mais lento: o teste que reproduz o defeito é o passo RED do ciclo, e o
+defeito é a prova de que o teste faltava. E `tca trace --impacto <arquivo>` devolve os
+requisitos afetados, de modo que a correção **herda** o requisito sem ninguém declarar.
+
+O caso que legitimamente bloqueia é o quarto: quando a realidade de negócio contradiz o
+requisito declarado. Aí parar é correto — implementar contra requisito errado é o erro
+mais caro que existe.
+
+### Signatário do portão
+
+Autorização e execução são coisas distintas.
+
+- **Quem pode assinar** é declarado **antes**, por portão, em `tca.signatarios.json`.
+  Decisão tomada sob pressão é decisão viciada, e o ÂNCORA §2.4 é explícito sobre o viés
+  de quem conduz a avaliação ter interesse na aprovação.
+- **Quem assinou** é registrado **no momento**, escolhido entre os autorizados, junto com
+  a referência do que foi aprovado. Assinatura que não se liga a um conteúdo não vincula
+  nada.
+
+Há signatário padrão, de modo que o caso comum não custa nada e a exceção é uma flag. A
+lista não vive no PRD: o PRD congela, e quem assina muda por motivos que nada têm a ver
+com o produto.
+
 ### Auto-verificação do pipeline
 
 `tca selfcheck` pergunta se a própria verificação está de pé: o contrato de execução

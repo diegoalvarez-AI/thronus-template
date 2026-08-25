@@ -230,6 +230,75 @@
       "severidade": "residual",
       "origem": "Restrição de laço local: build lento retarda o desenvolvimento serial",
       "detectado_por": "tca metrics --medir-suite"
+    },
+    {
+      "id": "SEV-029",
+      "violacao": "Correção sem teste que reproduza o defeito",
+      "criterio": "classe-de-mudanca",
+      "severidade": "bloqueante",
+      "origem": "O defeito é a prova de que faltava teste; exigi-lo não adiciona passo, é o RED do ciclo",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-030",
+      "violacao": "Nova capacidade sem requisito declarado",
+      "criterio": "classe-de-mudanca",
+      "severidade": "residual",
+      "origem": "Refinamento não pode bloquear em documentação; emenda acompanhada preserva a velocidade",
+      "detectado_por": "tca gate --classe feat"
+    },
+    {
+      "id": "SEV-031",
+      "violacao": "Realidade de negócio contradiz o requisito declarado",
+      "criterio": "classe-de-mudanca",
+      "severidade": "bloqueante",
+      "origem": "Implementar contra requisito errado é o erro mais caro; parar é o comportamento correto",
+      "detectado_por": null
+    },
+    {
+      "id": "SEV-032",
+      "violacao": "Portão sem signatário identificado",
+      "criterio": "responsabilidade",
+      "severidade": "bloqueante",
+      "origem": "ÂNCORA §4.2 — alteração de estado é privativa do signatário designado, pessoa identificada",
+      "detectado_por": "tca gate --assinar"
+    },
+    {
+      "id": "SEV-033",
+      "violacao": "Signatário não autorizado para este portão",
+      "criterio": "responsabilidade",
+      "severidade": "bloqueante",
+      "origem": "Autorização é decisão tomada antes; autodesignação no momento da aprovação é o viés que o ÂNCORA §2.4 restringe",
+      "detectado_por": "tca gate --assinar"
     }
-  ]
+  ],
+  "_classes": {
+    "_nota": "Nem toda mudança é mudança de requisito. O tipo do Conventional Commit já classifica, e a classe determina o que o portão exige.",
+    "fix": {
+      "exige": [
+        "SEV-029"
+      ],
+      "dispensa": [
+        "SEV-014",
+        "SEV-030"
+      ],
+      "porque": "o requisito já existe; o que faltava era teste"
+    },
+    "feat": {
+      "exige": [
+        "SEV-030"
+      ],
+      "dispensa": [],
+      "porque": "muda o que o sistema deve fazer; a emenda é pendência acompanhada, não bloqueio"
+    },
+    "tecnico": {
+      "exige": [],
+      "dispensa": [
+        "SEV-014",
+        "SEV-029",
+        "SEV-030"
+      ],
+      "porque": "sem efeito de negócio: refactor, perf, chore, build, ci, docs, test"
+    }
+  }
 }

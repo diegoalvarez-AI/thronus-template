@@ -1,0 +1,11 @@
+{
+  "_nota": "Autorização, não execução. Quem PODE assinar cada portão, decidido antes — copie para tca.signatarios.json na raiz do projeto.",
+  "_porque": "Decisão tomada sob pressão é decisão viciada. O ÂNCORA §2.4 é explícito sobre o viés de quem conduz a avaliação ter interesse na aprovação.",
+  "padrao": ["Diego Alvarez"],
+  "portoes": {
+    "PLAN": ["Diego Alvarez"],
+    "ARCHITECTURE": ["Diego Alvarez", "Bernardo Benevides Alvarez"],
+    "COMMIT": ["Diego Alvarez"],
+    "RELEASE": ["Diego Alvarez", "Bernardo Benevides Alvarez"]
+  }
+}
