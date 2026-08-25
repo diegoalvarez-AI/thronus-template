@@ -554,6 +554,52 @@ class TestMetrics(unittest.TestCase):
                             for n in reg["nao_instrumentado"]),
                         "com contrato declarado, a lacuna é de ambiente, não de declaração")
 
+    def test_perfil_suite_calcula_overhead(self):
+        (self.dir / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "perfil_suite": "python3 -c \"print('{\\\"setup\\\":10.6,\\\"prepare\\\":12.0,\\\"total\\\":24.5}')\"",
+        }}), encoding="utf-8")
+        self.assertEqual(tca.main(["metrics", "--write", "--perfil-suite"]), 0)
+        d = self._registro()["overhead_pct"]
+        self.assertEqual(d["valor"], 92.2, "(10.6+12.0)/24.5")
+        self.assertEqual(d["origem"], "derivado:execucao")
+
+    def test_perfil_suite_fora_do_contrato_vira_lacuna(self):
+        (self.dir / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "perfil_suite": "python3 -c \"print('lento')\"",
+        }}), encoding="utf-8")
+        tca.main(["metrics", "--write", "--perfil-suite"])
+        self.assertEqual(self._registro()["overhead_pct"]["origem"], "lacuna")
+
+    def test_loop_local_amostra_commits_reais(self):
+        (self.dir / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "contar_testes": "python3 -c \"print(1000)\"",
+            "testes_relacionados": "python3 -c \"pass\" {arquivos}",
+            "contar_relacionados": "python3 -c \"print(30)\" {arquivos}",
+        }}), encoding="utf-8")
+        self.assertEqual(tca.main(["metrics", "--write", "--medir-loop", "--amostra", "3"]), 0)
+        ind = self._registro()
+        self.assertIsNotNone(ind["loop_local_segundos"]["valor"])
+        self.assertIn("varridos", ind["loop_local_segundos"]["nota"],
+                      "a nota deve dizer quantos commits foram varridos e quantos foram pulados")
+        self.assertEqual(ind["testes_selecionados_pct"]["valor"], 3.0, "30 de 1000")
+
+    def test_selecionados_sem_total_vira_lacuna(self):
+        (self.dir / tca.P_PROJETO_CFG).write_text(json.dumps({"comandos": {
+            "testes_relacionados": "python3 -c \"pass\" {arquivos}",
+            "contar_relacionados": "python3 -c \"print(30)\" {arquivos}",
+        }}), encoding="utf-8")
+        tca.main(["metrics", "--write", "--medir-loop"])
+        d = self._registro()["testes_selecionados_pct"]
+        self.assertIsNone(d["valor"])
+        self.assertEqual(d["origem"], "lacuna")
+
+    def test_loop_sem_contrato_nao_adivinha(self):
+        tca.main(["metrics", "--write", "--medir-loop"])
+        reg = json.loads((self.dir / tca.P_METRICAS).read_text(encoding="utf-8")
+                         .strip().splitlines()[-1])
+        self.assertNotIn("loop_local_segundos", reg["indicadores"])
+        self.assertTrue(any("testes_relacionados" in n for n in reg["nao_instrumentado"]))
+
     def test_detectar_nao_executa(self):
         (self.dir / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
         (self.dir / "marcador").write_text("intacto", encoding="utf-8")
@@ -572,6 +618,77 @@ class TestMetrics(unittest.TestCase):
         (self.dir / P_INDEX).write_text('{"estado_da_trilha":{}}', encoding="utf-8")
         self._commit("chore: nada", "z.md", "z\n")
         self.assertEqual(tca.main(["metrics"]), 0)
+
+
+class TestAmbienteETune(unittest.TestCase):
+    """Máquinas distintas: medida sem ambiente é incomparável."""
+
+    def setUp(self):
+        import os
+        self.dir = Path(tempfile.mkdtemp())
+        (self.dir / "docs/ThronusSpec/05_Monitoramento").mkdir(parents=True)
+        (self.dir / "docs/ThronusSpec/03_Desenvolvimento").mkdir(parents=True)
+        (self.dir / P_INDEX).write_text('{"estado_da_trilha":{}}', encoding="utf-8")
+        self._cwd = Path.cwd()
+        os.chdir(self.dir)
+
+    def tearDown(self):
+        import os
+        os.chdir(self._cwd)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _grava(self, host, **indicadores):
+        reg = {"ts": "2026-08-25T10:00:00-03:00", "ref": "abc", "tca_versao": "9.9.9",
+               "ambiente": {"host": host, "cores": 8, "ram_gb": 32,
+                            "disco_rotacional": False, "so": "Linux"},
+               "indicadores": {k: {"valor": v, "origem": "derivado:execucao"}
+                               for k, v in indicadores.items()},
+               "nao_instrumentado": []}
+        with (self.dir / tca.P_METRICAS).open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(reg) + "\n")
+
+    def test_ambiente_tem_os_campos_que_tornam_a_medida_comparavel(self):
+        amb = tca.ambiente()
+        for k in ("host", "cores", "ram_gb", "disco_rotacional", "so"):
+            self.assertIn(k, amb)
+
+    def test_tune_ignora_medicao_de_outra_maquina(self):
+        self._grava("outra-maquina", overhead_pct=95.0)
+        self.assertEqual(tca.main(["tune", "--write"]), 0)
+        host = tca.ambiente()["host"]
+        d = json.loads((self.dir / tca.P_TUNING.format(host=host)).read_text(encoding="utf-8"))
+        self.assertIsNone(d["baseado_em"], "medição de outra máquina não pode ser usada")
+        self.assertIsNone(d["parametros"]["isolamento_por_arquivo"])
+
+    def test_tune_usa_medicao_da_propria_maquina(self):
+        self._grava(tca.ambiente()["host"], overhead_pct=92.8, loop_local_segundos=4.4)
+        tca.main(["tune", "--write"])
+        host = tca.ambiente()["host"]
+        d = json.loads((self.dir / tca.P_TUNING.format(host=host)).read_text(encoding="utf-8"))
+        self.assertIs(d["parametros"]["isolamento_por_arquivo"], False)
+        self.assertIsNotNone(d["baseado_em"])
+
+    def test_overhead_baixo_mantem_isolamento(self):
+        self._grava(tca.ambiente()["host"], overhead_pct=12.0)
+        tca.main(["tune", "--write"])
+        host = tca.ambiente()["host"]
+        d = json.loads((self.dir / tca.P_TUNING.format(host=host)).read_text(encoding="utf-8"))
+        self.assertIs(d["parametros"]["isolamento_por_arquivo"], True)
+
+    def test_toda_recomendacao_carrega_evidencia(self):
+        self._grava(tca.ambiente()["host"], overhead_pct=92.8)
+        tca.main(["tune", "--write"])
+        host = tca.ambiente()["host"]
+        d = json.loads((self.dir / tca.P_TUNING.format(host=host)).read_text(encoding="utf-8"))
+        for r in d["recomendacoes"]:
+            self.assertTrue(r.get("porque") and r.get("evidencia"),
+                            f"{r['parametro']} sem porquê ou evidência")
+
+    def test_arquivo_e_por_maquina(self):
+        tca.main(["tune", "--write"])
+        gerados = list((self.dir / ".tca").glob("tuning-*.json"))
+        self.assertEqual(len(gerados), 1)
+        self.assertIn(tca.ambiente()["host"], gerados[0].name)
 
 
 class TestPacote(unittest.TestCase):

@@ -17,8 +17,10 @@ Comandos:
   tca doctor [--strict]          divergência entre o projeto e o canon
   tca agents [--write]           gera/verifica o AGENTS.md
   tca lock [--write]             fixa a origem e o hash do canon instalado
+  tca tune [--write]             parâmetros derivados das métricas desta máquina
   tca update [--apply]           confere/aplica versão nova a partir da origem
   tca metrics [--repo D]         linha de base derivada do histórico
+                                 (--medir-suite · --contar-testes · --medir-loop)
 
 Todo comando emite registro de execução em
 docs/ThronusSpec/05_Monitoramento/tca_execution_log.jsonl — portão que não
@@ -35,6 +37,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from shlex import quote as shlex_quote
 
 PKG_DIR = Path(__file__).resolve().parent.parent
 MANIFEST = PKG_DIR / "MANIFEST.sha256"     # integridade do código do pacote
@@ -49,10 +52,18 @@ P_METRICAS = "docs/ThronusSpec/05_Monitoramento/metricas.jsonl"
 
 # Contrato de comandos do projeto. Existe porque medir a suíte exige saber como
 # ela roda, e adivinhar isso seria inferência. O projeto declara; a TCA executa.
-#   {"comandos": {"testes": "pytest -q",
-#                 "contar_testes": "pytest --collect-only -q | tail -1"}}
-# `contar_testes` deve imprimir SOMENTE um inteiro em stdout — sem contrato de
-# saída não há como derivar o número sem inferir formato de runner.
+#   {"comandos": {
+#      "testes":             "pytest -q",
+#      "contar_testes":      "pytest --collect-only -q | grep -c '::'",
+#      "perfil_suite":       "<comando que imprime {setup,prepare,total} em JSON>",
+#      "testes_relacionados":"pytest {arquivos}",
+#      "contar_relacionados":"pytest --collect-only -q {arquivos} | grep -c '::'"}}
+#
+# Contratos de saída, porque parsear formato de runner seria inferência:
+#   contar_testes / contar_relacionados → SOMENTE um inteiro em stdout
+#   perfil_suite                        → um objeto JSON com setup, prepare e
+#                                         total numéricos, em segundos
+# Onde houver {arquivos}, a TCA substitui pela lista de caminhos alterados.
 P_PROJETO_CFG = "tca.project.json"
 
 # Sugestões de detecção. NUNCA executadas automaticamente: o operador confirma
@@ -106,6 +117,11 @@ P_OVERRIDES = "tca-overrides.json"
 # canon guarda a metodologia e nada guardaria o canon.
 P_LOCK = "tca.lock.json"
 
+# Ajuste por máquina. Derivado das métricas medidas NESTE ambiente, gerado e
+# nunca editado. Não é versionado: é estado derivado e específico da máquina —
+# versionar faria o ajuste de um ambiente governar os demais.
+P_TUNING = ".tca/tuning-{host}.json"
+
 
 class TcaError(Exception):
     """Erro de uso ou de estado. Mensagem vai para stderr, exit != 0."""
@@ -136,6 +152,38 @@ def versao_pacote() -> str:
 
 def hash_manifesto() -> str:
     return sha256(MANIFEST)[:12] if MANIFEST.exists() else "sem-manifesto"
+
+
+def ambiente() -> dict:
+    """Impressão digital da máquina.
+
+    Medida de tempo sem ambiente é incomparável: 26s numa máquina de 4 núcleos
+    com disco mecânico não é o mesmo número que 26s noutra. Sem isto, séries de
+    máquinas diferentes se misturam em silêncio e a linha de base mente.
+    """
+    import platform
+    ram_gb = None
+    try:
+        ram_gb = round(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 1024**3)
+    except (ValueError, OSError, AttributeError):
+        pass
+    rotacional = None
+    try:
+        # lsblk resolve LVM e mapper; caminhar /sys/block à mão não resolve.
+        dev = os.popen("findmnt -no SOURCE --target . 2>/dev/null").read().strip()
+        if dev:
+            saida = os.popen(f"lsblk -no ROTA {shlex_quote(dev)} 2>/dev/null").read().split()
+            if saida:
+                rotacional = saida[0] == "1"
+    except Exception:
+        pass
+    return {
+        "host": platform.node(),
+        "cores": os.cpu_count(),
+        "ram_gb": ram_gb,
+        "disco_rotacional": rotacional,
+        "so": f"{platform.system()} {platform.release()}",
+    }
 
 
 def achar_raiz(inicio: Path) -> Path:
@@ -769,6 +817,93 @@ def _medir_suite(raiz: Path, timeout: int) -> dict:
                                "resultado": "ok" if cod == 0 else f"exit {cod}"}}
 
 
+def _perfil_suite(raiz: Path, timeout: int) -> dict:
+    """Fração do tempo gasta preparando ambiente em vez de testando.
+
+    É o indicador estrutural: quando sobe, a suíte está pagando por arquivo em
+    vez de por teste — e é isso que torna o laço local lento sem que ninguém
+    tenha escrito um teste ruim.
+    """
+    cmd = _ler_cfg(raiz).get("perfil_suite")
+    if not cmd:
+        return _lacuna_cfg(raiz, "perfil_suite")
+    cod, saida, _ = _rodar(raiz, cmd, timeout)
+    try:
+        d = json.loads(saida.strip().splitlines()[-1])
+        setup, prepare, total = float(d["setup"]), float(d["prepare"]), float(d["total"])
+    except Exception:
+        return {"overhead_pct": {"valor": None, "origem": "lacuna",
+                                 "nota": "perfil_suite não imprimiu {setup,prepare,total} em JSON"}}
+    if cod != 0 or total <= 0:
+        return {"overhead_pct": {"valor": None, "origem": "lacuna",
+                                 "nota": f"perfil_suite falhou (exit {cod})"}}
+    return {"overhead_pct": {"valor": round(100 * (setup + prepare) / total, 1),
+                             "origem": "derivado:execucao", "comando": cmd,
+                             "nota": f"setup {setup:.1f}s + prepare {prepare:.1f}s de {total:.1f}s"}}
+
+
+def _medir_loop(raiz: Path, timeout: int, amostra: int, total_testes: int | None) -> dict:
+    """Custo do laço local sobre mudanças reais, não sobre uma mudança inventada.
+
+    A amostra são os últimos commits: o que já foi alterado é a melhor
+    aproximação do que será alterado.
+    """
+    import shlex
+    cmds = _ler_cfg(raiz)
+    rodar_rel = cmds.get("testes_relacionados")
+    if not rodar_rel:
+        return _lacuna_cfg(raiz, "testes_relacionados")
+
+    # Commit que não seleciona teste algum — só configuração ou documento — não
+    # mede laço de desenvolvimento. Olha-se mais para trás até completar a
+    # amostra, com teto de varredura para não percorrer o histórico inteiro.
+    contar_rel = cmds.get("contar_relacionados")
+    limite = max(amostra * 6, 20)
+    shas = (_git(raiz, "log", "-n", str(limite), "--no-merges", "--format=%H") or "").split()
+    tempos, selecionados, varridos, pulados = [], [], 0, 0
+    for sha in shas:
+        if len(tempos) >= amostra:
+            break
+        varridos += 1
+        saida = _git(raiz, "show", "--name-only", "--format=", sha) or ""
+        arquivos = [f for f in saida.split() if (raiz / f).is_file()][:40]
+        if not arquivos:
+            pulados += 1
+            continue
+        lista = " ".join(shlex.quote(f) for f in arquivos)
+        n_sel = None
+        if contar_rel:
+            c_cod, c_saida, _ = _rodar(raiz, contar_rel.replace("{arquivos}", lista), timeout)
+            txt = c_saida.strip().splitlines()[-1].strip() if c_saida.strip() else ""
+            n_sel = int(txt) if c_cod == 0 and txt.isdigit() else None
+            if n_sel == 0:
+                pulados += 1
+                continue
+        _cod, _s, seg = _rodar(raiz, rodar_rel.replace("{arquivos}", lista), timeout)
+        tempos.append(seg)
+        if n_sel:
+            selecionados.append(n_sel)
+
+    if not tempos:
+        return {"loop_local_segundos": {"valor": None, "origem": "lacuna",
+                                        "nota": "nenhum commit da amostra alterou arquivo existente"}}
+    saida = {"loop_local_segundos": {
+        "valor": round(_mediana(tempos), 1), "origem": "derivado:execucao",
+        "comando": rodar_rel,
+        "nota": f"mediana de {len(tempos)} commits com teste relacionado "
+                f"({varridos} varridos, {pulados} sem seleção)"}}
+    if selecionados and total_testes:
+        saida["testes_selecionados_pct"] = {
+            "valor": round(100 * _mediana(selecionados) / total_testes, 1),
+            "origem": "derivado:execucao",
+            "nota": f"mediana {_mediana(selecionados):.0f} de {total_testes} testes"}
+    elif selecionados:
+        saida["testes_selecionados_pct"] = {
+            "valor": None, "origem": "lacuna",
+            "nota": "exige suite_testes — use também --contar-testes"}
+    return saida
+
+
 def cmd_metrics(args) -> int:
     """Linha de base do processo, derivada do que já aconteceu.
 
@@ -862,6 +997,7 @@ def cmd_metrics(args) -> int:
         "repo": raiz.name,
         "ref": _git(raiz, "rev-parse", "HEAD") or "desconhecida",
         "tca_versao": versao_pacote(),
+        "ambiente": ambiente(),
         "janela": {"desde": datas[0][:10] if datas else None,
                    "ate": datas[-1][:10] if datas else None},
         "indicadores": indicadores,
@@ -881,16 +1017,26 @@ def cmd_metrics(args) -> int:
                   else f"declare comandos.testes em {P_PROJETO_CFG}")
         registro["nao_instrumentado"].insert(1, f"suite_segundos — {motivo}")
 
-    for ativo, fn in ((args.medir_suite, _medir_suite),
-                      (args.medir_suite or args.contar_testes, _contar_testes)):
-        if not ativo:
-            continue
-        medida = fn(raiz, args.timeout)
+    def _aplicar(medida):
         if "_lacuna" in medida:
             registro["nao_instrumentado"].append(medida["_lacuna"])
         else:
             registro["indicadores"].update(medida)
 
+    if args.medir_suite:
+        _aplicar(_medir_suite(raiz, args.timeout))
+    if args.medir_suite or args.contar_testes or args.medir_loop:
+        _aplicar(_contar_testes(raiz, args.timeout))
+    if args.perfil_suite:
+        _aplicar(_perfil_suite(raiz, args.timeout))
+    if args.medir_loop:
+        total_t = registro["indicadores"].get("suite_testes", {}).get("valor")
+        _aplicar(_medir_loop(raiz, args.timeout, args.amostra, total_t))
+
+    amb = registro["ambiente"]
+    disco = {True: "mecânico", False: "SSD", None: "?"}[amb["disco_rotacional"]]
+    print(f"       ambiente {amb['host']} · {amb['cores']} núcleos · "
+          f"{amb['ram_gb']}GB · disco {disco}")
     jan = registro["janela"]
     janela_txt = f"janela {jan['desde']} → {jan['ate']}" if jan["desde"] else "sem janela de MS"
     print(f"       repositório {raiz.name} · {janela_txt}")
@@ -924,6 +1070,131 @@ def cmd_metrics(args) -> int:
         print(f"OK     linha de base gravada em {P_METRICAS}")
     else:
         print("OK     modo relatório — nada foi escrito. Use --write para fixar a linha de base.")
+    return 0
+
+
+def _ultimo_registro_do_ambiente(raiz: Path, host: str) -> dict | None:
+    """Última medição feita NESTA máquina. Misturar ambientes corrompe a série."""
+    f = raiz / P_METRICAS
+    if not f.exists():
+        return None
+    achado = None
+    for linha in f.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        try:
+            r = json.loads(linha)
+        except json.JSONDecodeError:
+            continue
+        if r.get("ambiente", {}).get("host") == host:
+            achado = r
+    return achado
+
+
+def cmd_tune(args) -> int:
+    """Deriva parâmetros de execução a partir do que foi medido nesta máquina.
+
+    A TCA **emite**; o projeto **consome**. Nenhuma configuração de runner é
+    alterada aqui: escrever no vitest.config.ts do projeto seria a TCA
+    introduzindo conteúdo que o projeto não declarou.
+    """
+    try:
+        raiz = achar_raiz(Path.cwd())
+    except TcaError:
+        raiz = PKG_DIR.parent
+    amb = ambiente()
+    reg = _ultimo_registro_do_ambiente(raiz, amb["host"])
+    ind = (reg or {}).get("indicadores", {})
+
+    def valor(nome):
+        v = ind.get(nome, {})
+        return v.get("valor") if isinstance(v, dict) else None
+
+    cores = amb["cores"] or 2
+    rotacional = amb["disco_rotacional"]
+    overhead = valor("overhead_pct")
+    loop = valor("loop_local_segundos")
+    suite = valor("suite_segundos")
+    sel_pct = valor("testes_selecionados_pct")
+
+    rec: list[dict] = []
+
+    # Concorrência: o teto é o número de núcleos. Em disco mecânico, o gargalo é
+    # I/O e saturar os núcleos só aumenta disputa pelo disco.
+    conc = max(1, cores - 1) if rotacional else cores
+    rec.append({
+        "parametro": "concorrencia_max", "valor": conc,
+        "porque": "disco mecânico: reservar um núcleo reduz disputa de I/O" if rotacional
+                  else "um trabalhador por núcleo",
+        "evidencia": f"{cores} núcleos · disco "
+                     f"{'mecânico' if rotacional else 'SSD' if rotacional is False else 'indeterminado'}",
+    })
+
+    if overhead is None:
+        rec.append({"parametro": "isolamento_por_arquivo", "valor": None,
+                    "porque": "sem medição de overhead nesta máquina",
+                    "evidencia": "rode: tca metrics --perfil-suite --write"})
+    elif overhead >= 60:
+        rec.append({
+            "parametro": "isolamento_por_arquivo", "valor": False,
+            "porque": "preparar ambiente por arquivo domina o tempo; desligar o "
+                      "isolamento na camada sem I/O devolve a maior parte dele",
+            "evidencia": f"overhead_pct={overhead} — {ind['overhead_pct'].get('nota', '')}",
+        })
+    else:
+        rec.append({"parametro": "isolamento_por_arquivo", "valor": True,
+                    "porque": "overhead baixo; isolamento não é o gargalo aqui",
+                    "evidencia": f"overhead_pct={overhead}"})
+
+    if loop is not None and suite:
+        rec.append({
+            "parametro": "laco_local_por_selecao", "valor": True,
+            "porque": "selecionar por impacto custa uma fração da suíte completa",
+            "evidencia": f"laço {loop}s contra suíte {suite}s"
+                         + (f" · {sel_pct}% dos testes selecionados" if sel_pct else ""),
+        })
+    elif loop is not None:
+        rec.append({"parametro": "laco_local_por_selecao", "valor": True,
+                    "porque": "laço por seleção medido; falta o total para comparar",
+                    "evidencia": f"laço {loop}s · rode --medir-suite para o total"})
+
+    if rotacional:
+        rec.append({
+            "parametro": "observadores_redundantes", "valor": False,
+            "porque": "cada observador varre a árvore; em disco mecânico isso "
+                      "compete com a própria execução dos testes",
+            "evidencia": "disco rotacional detectado",
+        })
+
+    dados = {
+        "_gerado_por": "tca tune — não edite; regenere",
+        "ambiente": amb,
+        "baseado_em": {"ts": (reg or {}).get("ts"), "ref": (reg or {}).get("ref"),
+                       "tca_versao": (reg or {}).get("tca_versao")} if reg else None,
+        "parametros": {r["parametro"]: r["valor"] for r in rec},
+        "recomendacoes": rec,
+    }
+
+    disco = {True: "mecânico", False: "SSD", None: "?"}[rotacional]
+    print(f"       ambiente {amb['host']} · {cores} núcleos · {amb['ram_gb']}GB · disco {disco}")
+    if not reg:
+        print(f"AVISO  nenhuma medição desta máquina em {P_METRICAS} — "
+              "parâmetros derivam só do hardware.")
+    else:
+        print(f"       medição base {reg['ts'][:19]} · tca {reg.get('tca_versao')}")
+    for r in rec:
+        v = "—" if r["valor"] is None else str(r["valor"])
+        print(f"       {r['parametro']:28} {v:>7}   {r['porque']}")
+        print(f"       {'':28} {'':>7}   [{r['evidencia']}]")
+
+    if args.write:
+        destino = raiz / P_TUNING.format(host=amb["host"])
+        escrever_json(destino, dados)
+        registrar_execucao(raiz, "tune", "ok", {"host": amb["host"]})
+        print(f"OK     {destino.relative_to(raiz)} gerado — o projeto consome se quiser")
+    else:
+        print("OK     modo relatório — use --write para gerar o arquivo por máquina.")
     return 0
 
 
@@ -1051,12 +1322,22 @@ def main(argv=None) -> int:
                    help=f"executa e cronometra a suíte declarada em {P_PROJETO_CFG}")
     m.add_argument("--contar-testes", action="store_true", dest="contar_testes",
                    help="conta os testes sem executar a suíte — não exige ambiente")
+    m.add_argument("--perfil-suite", action="store_true", dest="perfil_suite",
+                   help="fração do tempo gasta preparando ambiente (overhead_pct)")
+    m.add_argument("--medir-loop", action="store_true", dest="medir_loop",
+                   help="custo do laço local sobre os últimos commits reais")
+    m.add_argument("--amostra", type=int, default=5,
+                   help="quantos commits recentes amostrar em --medir-loop (padrão 5)")
     m.add_argument("--timeout", type=int, default=1800,
                    help="limite em segundos para a suíte (padrão 1800)")
     m.add_argument("--detectar", action="store_true",
                    help="sugere comandos a declarar, sem executar nenhum")
     m.add_argument("--write", action="store_true", help="grava a linha de base")
     m.set_defaults(fn=cmd_metrics)
+
+    t = sub.add_parser("tune", help="parâmetros derivados das métricas desta máquina")
+    t.add_argument("--write", action="store_true", help="gera .tca/tuning-<host>.json")
+    t.set_defaults(fn=cmd_tune)
 
     d = sub.add_parser("doctor", help="divergência entre o projeto e o canon")
     d.add_argument("--strict", action="store_true", help="divergência não declarada reprova")

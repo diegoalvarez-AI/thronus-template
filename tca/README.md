@@ -226,6 +226,34 @@ O que continua não instrumentável aparece como **lacuna declarada**, não esti
 `--repo` mede outro repositório sem escrever nada nele. Sem `--write` é relatório puro:
 não grava linha de base nem registro de execução — é comando de medida, não portão.
 
+### `tca tune [--write]`
+
+**Auto-ajuste por máquina.** Deriva parâmetros de execução do que foi medido *nesta*
+máquina e do hardware dela, e emite `.tca/tuning-<host>.json`.
+
+Existe porque medida de tempo sem ambiente é incomparável: 26s numa máquina de 4 núcleos
+com disco mecânico não é o mesmo número que 26s noutra. Por isso **todo registro de
+`tca metrics` carrega a impressão digital da máquina** — host, núcleos, RAM, disco
+rotacional e sistema — e o `tune` só considera medições do próprio ambiente. Séries de
+máquinas diferentes nunca se misturam.
+
+Cada parâmetro sai com **porquê e evidência**:
+
+| Parâmetro | Deriva de |
+|---|---|
+| `concorrencia_max` | núcleos, menos um em disco mecânico — o gargalo é I/O, não CPU |
+| `isolamento_por_arquivo` | `overhead_pct` medido; acima de 60% recomenda desligar na camada sem I/O |
+| `laco_local_por_selecao` | comparação entre `loop_local_segundos` e `suite_segundos` |
+| `observadores_redundantes` | disco rotacional |
+
+Sem medição da máquina, os parâmetros que dependem dela saem como `null` com a instrução
+do que rodar — não com um valor inventado.
+
+**A TCA emite; o projeto consome.** Nenhuma configuração de runner é alterada: escrever no
+`vitest.config.ts` ou equivalente seria a TCA introduzir conteúdo que o projeto não
+declarou. O arquivo gerado é por máquina e não é versionado — versionar faria o ajuste de
+um ambiente governar os demais.
+
 ### `tca verify-self`
 
 Confere `MANIFEST.sha256` contra o conteúdo do pacote. A TCA é fonte canônica: precisa
