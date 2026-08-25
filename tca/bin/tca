@@ -1149,6 +1149,10 @@ def _marcadores(raiz: Path) -> dict[str, list[str]]:
             continue
         if "@tca" not in texto:
             continue
+        # Conteúdo gerado é derivado, não fonte de declaração de cobertura.
+        # O AGENTS.md, por exemplo, carrega os exemplos da própria metodologia.
+        if "GERADO por" in texto[:600]:
+            continue
         ids: list[str] = []
         for m in MARCADOR_RE.finditer(texto):
             ids += ID_RE.findall(m.group(1))

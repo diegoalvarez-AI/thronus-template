@@ -330,6 +330,13 @@ class TestTrace(Base):
         }}), encoding="utf-8")
         self.assertEqual(tca.main(["trace", "--strict"]), 1)
 
+    def test_conteudo_gerado_nao_declara_cobertura(self):
+        """O AGENTS.md carrega os exemplos da metodologia; indexá-lo faria o
+        índice afirmar cobertura que não existe."""
+        self._arquivo("AGENTS.md", "<!-- GERADO por `tca agents --write` -->\n\n# @tca RF-999\n")
+        tca.main(["trace", "--write"])
+        self.assertEqual(self._indice()["por_arquivo"], {})
+
     def test_indice_e_conteudo_gerado(self):
         self._arquivo("tests/test_turma.py", "# @tca RF-014\n")
         tca.main(["trace", "--write"])
