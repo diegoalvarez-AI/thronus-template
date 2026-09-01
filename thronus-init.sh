@@ -77,6 +77,13 @@ if [[ -d "$DEST_DIR" ]]; then
   exit 1
 fi
 cp -r "$TEMPLATE_DIR" "$DEST_DIR"
+
+# O template é ele mesmo um repositório git. Copiado com -r, o projeto derivado
+# herda o histórico do template E os seus remotes — e o passo 8 então vê um
+# 'origin' já configurado e pula a criação do repositório. O resultado é um
+# projeto de cliente apontando para o repo da metodologia: um push empurraria o
+# projeto por cima do template. O .git copiado é removido aqui.
+rm -rf "${DEST_DIR}/.git"
 cd "$DEST_DIR"
 rm -f thronus-init.sh  # Não propagar o script de init no projeto derivado
 
