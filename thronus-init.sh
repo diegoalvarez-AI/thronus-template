@@ -124,6 +124,35 @@ cat > "context/activeContext.md" <<'EOF'
 **Cenários BDD:** —
 EOF
 
+# Zerar o estado de demonstração que o template carrega. O template é um projeto
+# TCA de si mesmo e tem archive, MS concluída e contagem de testes próprios;
+# copiá-los faz o projeto novo nascer alegando entrega que não houve, e o
+# tca verify reprova (SEV-036).
+python3 - <<'PYEOF'
+import json, pathlib
+idx = pathlib.Path("docs/ThronusSpec/03_Desenvolvimento/payload_index.json")
+if idx.is_file():
+    d = json.loads(idx.read_text(encoding="utf-8"))
+    d.get("estado_da_trilha", {}).update({
+        "fase_atual": "DISCOVERY", "ultima_micro_spec_concluida": None,
+        "micro_spec_ativa": None, "total_testes": 0,
+        "proximo_gate": "GATE_DISCOVERY", "status_modulo_percentual": "0%"})
+    d.setdefault("_archive", {})["keys"] = []
+    idx.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+logs = pathlib.Path("docs/ThronusSpec/05_Monitoramento/performance_logs.json")
+if logs.is_file():
+    d = json.loads(logs.read_text(encoding="utf-8")); d["registros"] = []
+    logs.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+arch = pathlib.Path("docs/ThronusSpec/03_Desenvolvimento/payload_archive")
+for f in arch.glob("*.json"):
+    f.unlink()
+for nome in ("tca_execution_log.jsonl", "metricas.jsonl"):
+    f = pathlib.Path("docs/ThronusSpec/05_Monitoramento") / nome
+    if f.is_file():
+        f.write_text("", encoding="utf-8")
+PYEOF
+echo "  ✓ estado zerado — projeto nasce em DISCOVERY"
+
 # ── 4. Criar .gitignore base ──────────────────────────────────────────────────
 # Um .gitignore mínimo — o starter tecnológico adiciona entradas específicas da stack
 if [[ ! -f ".gitignore" ]]; then
